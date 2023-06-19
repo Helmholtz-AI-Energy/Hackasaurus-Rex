@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, Dataset
 
 
 class DroneImages(torch.utils.data.Dataset):
-    def __init__(self, root: str = "data"):
+    def __init__(self, root: str = "data", train=True):
         self.root = Path(root)
         self.parse_json(self.root / "descriptor.json")
         # TODO: add process for lazy staging to TMP
@@ -26,6 +26,7 @@ class DroneImages(torch.utils.data.Dataset):
         self.staging_proc.start()
         _default_means = [130.0, 135.0, 135.0, 118.0, 118.0]
         _default_vars = [44.0, 40.0, 40.0, 30.0, 21.0]
+        self.train = train
 
         transformations = torch.nn.Sequential(
             torchvision.transforms.v2.ToTensor(),
@@ -36,6 +37,13 @@ class DroneImages(torch.utils.data.Dataset):
         )
 
         self.transformations = torch.jit.script(transformations)
+
+        vtransformations = torch.nn.Sequential(
+            torchvision.transforms.v2.ToTensor(),
+            torchvision.transforms.Normalize(_default_means, _default_vars),
+        )
+
+        self.val_transformations = torch.jit.script(vtransformations)
 
     @staticmethod
     def stage(queue, saved_dict):
@@ -125,7 +133,10 @@ class DroneImages(torch.utils.data.Dataset):
         }
         x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
 
-        x, y = self.transformations(x, y)
+        if self.train:
+            x, y = self.transformations(x, y)
+        else:
+            x, y = self.val_transformations(x, y)
         return x, y
 
 
