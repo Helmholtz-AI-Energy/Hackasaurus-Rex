@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import argparse
-import collections
 import pathlib
 
 import yaml
@@ -14,6 +13,6 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
 
     with open(arguments.config, "r") as yaml_file:
-        config = collections.namedtuple(yaml.safe_load(yaml_file))
+        config = yaml.safe_load(yaml_file)
 
     eval(config)

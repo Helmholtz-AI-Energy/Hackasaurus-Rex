@@ -4,8 +4,9 @@ import numpy as np
 import torch
 import torch.optim
 import torch.utils.data
-from metric import IntersectionOverUnion, to_mask
 from tqdm import tqdm
+
+from hackasaurus_rex.metric import IntersectionOverUnion, to_mask
 
 
 def collate_fn(batch) -> tuple:
@@ -28,11 +29,11 @@ def initialize_model(hyperparameters):
 
 
 def load_model(hyperparameters):
-    if hyperparameters.model_checkpoint:
+    if "model_checkpoint" in hyperparameters:
         # TODO: initialize model and load checkpoint
         model = None
-        print(f"Restoring model checkpoint from {hyperparameters.model_checkpoint}")
-        model.load_state_dict(torch.load(hyperparameters.model_checkpoint))
+        print(f"Restoring model checkpoint from {hyperparameters['model_checkpoint']}")
+        model.load_state_dict(torch.load(hyperparameters["model_checkpoint"]))
         return model
     else:
         raise ValueError("Please provide a model checkpoint.")
@@ -81,7 +82,7 @@ def evaluate(model, test_loader, test_metric, device):
 
 
 def train(hyperparameters):
-    set_seed(hyperparameters.seed)
+    set_seed(hyperparameters["seed"])
 
     # determines the execution device, i.e. CPU or GPU
     device = get_device()
@@ -95,7 +96,7 @@ def train(hyperparameters):
     model.to(device)
 
     # set up optimization procedure
-    optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters["lr"])
     best_iou = 0.0
 
     train_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
@@ -104,7 +105,7 @@ def train(hyperparameters):
     test_metric = test_metric.to(device)
 
     # start the actual training procedure
-    for epoch in range(hyperparameters.epochs):
+    for epoch in range(hyperparameters["epochs"]):
         train_loss = train_epoch(model, optimizer, train_loader, train_metric, device)
         train_loss /= len(train_loader)
 
@@ -126,7 +127,7 @@ def train(hyperparameters):
 
 
 def eval(hyperparameters):
-    set_seed(hyperparameters.seed)
+    set_seed(hyperparameters["seed"])
     device = get_device()
 
     test_loader = None
