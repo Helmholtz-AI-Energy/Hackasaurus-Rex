@@ -27,6 +27,17 @@ def initialize_model(hyperparameters):
     pass
 
 
+def load_model(hyperparameters):
+    if hyperparameters.model_checkpoint:
+        # TODO: initialize model and load checkpoint
+        model = None
+        print(f"Restoring model checkpoint from {hyperparameters.model_checkpoint}")
+        model.load_state_dict(torch.load(hyperparameters.model_checkpoint))
+        return model
+    else:
+        raise ValueError("Please provide a model checkpoint.")
+
+
 def train_epoch(model, optimizer, train_loader, train_metric, device):
     # set the model into training mode
     model.train()
@@ -112,3 +123,19 @@ def train(hyperparameters):
             torch.save(model.state_dict(), "checkpoint.pt")
         else:
             print("\n")
+
+
+def eval(hyperparameters):
+    set_seed(hyperparameters.seed)
+    device = get_device()
+
+    test_loader = None
+    model = load_model(hyperparameters)
+    model.to(device)
+
+    test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
+    test_metric = test_metric.to(device)
+
+    evaluate(model, test_loader, test_metric, device)
+
+    print(f"Test IoU: {test_metric.compute()}")
