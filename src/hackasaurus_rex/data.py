@@ -1,21 +1,22 @@
-import os
 import glob
-import random
-import numpy as np
-import h5py as h5
 import json
-import torch
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image, ImageDraw
-from types import Tuple
+import os
+import random
 from multiprocessing import Process, Queue
 from pathlib import Path
+from types import Tuple
+
+import h5py as h5
+import numpy as np
+import torch
+from PIL import Image, ImageDraw
+from torch.utils.data import DataLoader, Dataset
 
 
 class DroneImages(torch.utils.data.Dataset):
-    def __init__(self, root: str = 'data'):
+    def __init__(self, root: str = "data"):
         self.root = Path(root)
-        self.parse_json(self.root / 'descriptor.json')
+        self.parse_json(self.root / "descriptor.json")
         # TODO: add process for lazy staging to TMP
         self.tmp_dir = Path(os.environ["TMPDIR"])
         self.queue = Queue()
@@ -34,26 +35,26 @@ class DroneImages(torch.utils.data.Dataset):
             if all(saved_dict):
                 return
 
-
     def parse_json(self, path: Path):
         """
         Reads and indexes the descriptor.json
 
-        The images and corresponding annotations are stored in COCO JSON format. This helper function reads out the images paths and segmentation masks.
+        The images and corresponding annotations are stored in COCO JSON format.
+        This helper function reads out the images paths and segmentation masks.
         """
-        with open(path, 'r') as handle:
+        with open(path, "r") as handle:
             content = json.load(handle)
 
-        self.ids = [entry['id'] for entry in content['images']]
-        self.images = {entry['id']: self.root / Path(entry['file_name']).name for entry in content['images']}
+        self.ids = [entry["id"] for entry in content["images"]]
+        self.images = {entry["id"]: self.root / Path(entry["file_name"]).name for entry in content["images"]}
 
         # add all annotations into a list for each image
         self.polys = {}
         self.bboxes = {}
-        for entry in content['annotations']:
-            image_id = entry['image_id']
-            self.polys.setdefault(image_id, []).append(entry['segmentation'])
-            self.bboxes.setdefault(image_id, []).append(entry['bbox'])
+        for entry in content["annotations"]:
+            image_id = entry["image_id"]
+            self.polys.setdefault(image_id, []).append(entry["segmentation"])
+            self.bboxes.setdefault(image_id, []).append(entry["bbox"])
 
     def __len__(self) -> int:
         return len(self.ids)
@@ -83,7 +84,14 @@ class DroneImages(torch.utils.data.Dataset):
         masks = []
         # generate the segmentation mask on the fly
         for poly in polys:
-            mask = Image.new('L', (x.shape[1], x.shape[0],), color=0)
+            mask = Image.new(
+                "L",
+                (
+                    x.shape[1],
+                    x.shape[0],
+                ),
+                color=0,
+            )
             draw = ImageDraw.Draw(mask)
             draw.polygon(poly[0], fill=1, outline=1)
             masks.append(np.array(mask))
@@ -98,12 +106,12 @@ class DroneImages(torch.utils.data.Dataset):
         boxes[:, 3] = boxes[:, 1] + boxes[:, 3]
 
         y = {
-            'boxes': boxes,  # FloatTensor[N, 4]
-            'labels': labels,  # Int64Tensor[N]
-            'masks': masks,  # UIntTensor[N, H, W]
+            "boxes": boxes,  # FloatTensor[N, 4]
+            "labels": labels,  # Int64Tensor[N]
+            "masks": masks,  # UIntTensor[N, H, W]
         }
         x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
-        x /= 255.
+        x /= 255.0
 
         return x, y
 
@@ -119,10 +127,10 @@ def create_train_val_split():
     val_size = int(0.2 * num_files)
     train_list = files[:-val_size]
     val_list = files[-val_size:]
-    with open('/hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/data/train.txt', 'w') as f:
+    with open("/hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/data/train.txt", "w") as f:
         for line in train_list:
             f.write(f"{line}\n")
-    with open('/hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/data/val.txt', 'w') as f:
+    with open("/hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/data/val.txt", "w") as f:
         for line in val_list:
             f.write(f"{line}\n")
 

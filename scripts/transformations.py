@@ -9,7 +9,7 @@ transformations = torch.nn.Sequential(
     torchvision.transforms.Normalize(_default_means, _default_vars),
     torchvision.transforms.v2.RandomHorizontalFlip(p=0.5),
     torchvision.transforms.v2.RandomVerticalFlip(p=0.5),
-    torchvision.transforms.v2.RandomRotation(90)
+    torchvision.transforms.v2.RandomRotation(90),
 )
 
 transformations = torch.jit.script(transformations)
