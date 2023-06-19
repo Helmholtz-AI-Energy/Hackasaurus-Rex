@@ -9,6 +9,7 @@ from types import Tuple
 import h5py as h5
 import numpy as np
 import torch
+import torchvision
 from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 
@@ -23,6 +24,18 @@ class DroneImages(torch.utils.data.Dataset):
         self.check_staged = {name: False for name in self.ids}
         self.staging_proc = Process(target=self.stage, args=(self.queue, self.check_staged))
         self.staging_proc.start()
+        _default_means = [130.0, 135.0, 135.0, 118.0, 118.0]
+        _default_vars = [44.0, 40.0, 40.0, 30.0, 21.0]
+
+        transformations = torch.nn.Sequential(
+            torchvision.transforms.v2.ToTensor(),
+            torchvision.transforms.Normalize(_default_means, _default_vars),
+            torchvision.transforms.v2.RandomHorizontalFlip(p=0.5),
+            torchvision.transforms.v2.RandomVerticalFlip(p=0.5),
+            torchvision.transforms.v2.RandomRotation(90),
+        )
+
+        self.transformations = torch.jit.script(transformations)
 
     @staticmethod
     def stage(queue, saved_dict):
@@ -111,8 +124,8 @@ class DroneImages(torch.utils.data.Dataset):
             "masks": masks,  # UIntTensor[N, H, W]
         }
         x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
-        x /= 255.0
 
+        x, y = self.transformations(x, y)
         return x, y
 
 
