@@ -88,7 +88,7 @@ def train(hyperparameters: argparse.Namespace):
         for i, batch in enumerate(tqdm(test_loader, desc="test ")):
             x_test, test_label = batch
             x_test = list(image.to(device) for image in x_test)
-            test_label = [{k: v.to(device) for k, v in labels.items()} for label in test_label]
+            test_label = [{k: v.to(device) for k, v in label.items()} for label in test_label]
 
             # score_threshold = 0.7
             with torch.no_grad():
