@@ -50,7 +50,7 @@ TOMOUNT+="/scratch,/tmp,"  # /opt/intel/lib/intel64,"
 
 #TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-dlrt/datasets"
 
-salloc --partition=normal \
+salloc --partition=accelerated \
     -N "${SLURM_NNODES}" \
     --time "${TIMELIMIT}" \
     --gres gpu:"${GPUS_PER_NODE}" \
@@ -58,4 +58,3 @@ salloc --partition=normal \
     --container-mounts="${TOMOUNT}" \
     --container-mount-home \
     --container-writable \
-
