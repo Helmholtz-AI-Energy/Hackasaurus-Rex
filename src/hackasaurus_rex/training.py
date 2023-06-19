@@ -4,6 +4,8 @@ import numpy as np
 import torch
 import torch.optim
 import torch.utils.data
+from torch import autocast
+from torch.cuda.amp import GradScaler
 from tqdm import tqdm
 
 from hackasaurus_rex.data import DroneImages
@@ -40,7 +42,7 @@ def load_model(hyperparameters):
         raise ValueError("Please provide a model checkpoint.")
 
 
-def train_epoch(model, optimizer, train_loader, train_metric, device):
+def train_epoch(model, optimizer, train_loader, train_metric, device, scaler):
     # set the model into training mode
     model.train()
 
@@ -51,8 +53,15 @@ def train_epoch(model, optimizer, train_loader, train_metric, device):
         x = list(image.to(device) for image in x)
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
         model.zero_grad()
-        losses = model(x, labels)
-        loss = sum(loss for loss in losses.values())
+
+        with autocast(device_type="cuda", dtype=torch.float16, enabled=True):
+            losses = model(x, labels)
+            # TODO: FIXME?
+            loss = sum(loss for loss in losses.values())
+        scaler.scale(loss).backward()
+
+        scaler.step(optimizer)
+        scaler.update()
 
         loss.backward()
         optimizer.step()
@@ -109,9 +118,11 @@ def train(hyperparameters):
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
     test_metric = test_metric.to(device)
 
+    scaler = GradScaler(enabled=True)
+
     # start the actual training procedure
     for epoch in range(hyperparameters["epochs"]):
-        train_loss = train_epoch(model, optimizer, train_loader, train_metric, device)
+        train_loss = train_epoch(model, optimizer, train_loader, train_metric, device, scaler)
         train_loss /= len(train_loader)
 
         evaluate(model, test_loader, test_metric, device)
