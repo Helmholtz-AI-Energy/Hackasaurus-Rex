@@ -4,7 +4,7 @@ import os
 import random
 from multiprocessing import Process, Queue
 from pathlib import Path
-from types import Tuple
+from typing import Tuple
 
 import h5py as h5
 import numpy as np
