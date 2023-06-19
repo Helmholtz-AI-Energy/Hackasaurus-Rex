@@ -12,6 +12,7 @@ import torch
 import torchvision
 from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms
 
 
 class DroneImages(torch.utils.data.Dataset):
@@ -27,23 +28,20 @@ class DroneImages(torch.utils.data.Dataset):
         _default_means = [130.0, 135.0, 135.0, 118.0, 118.0]
         _default_vars = [44.0, 40.0, 40.0, 30.0, 21.0]
         self.train = train
+        self.first_trans = torch.nn.Sequential(
+            transforms.v2.ToTensor(),
+            transforms.Normalize(_default_means, _default_vars),
+        )
 
         transformations = torch.nn.Sequential(
-            torchvision.transforms.v2.ToTensor(),
-            torchvision.transforms.Normalize(_default_means, _default_vars),
-            torchvision.transforms.v2.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.v2.RandomVerticalFlip(p=0.5),
-            torchvision.transforms.v2.RandomRotation(90),
+            transforms.v2.RandomHorizontalFlip(p=0.5),
+            transforms.v2.RandomVerticalFlip(p=0.5),
+            transforms.v2.RandomRotation(90),
         )
+        self.grey = transforms.Greyscale()
 
         self.transformations = torch.jit.script(transformations)
-
-        vtransformations = torch.nn.Sequential(
-            torchvision.transforms.v2.ToTensor(),
-            torchvision.transforms.Normalize(_default_means, _default_vars),
-        )
-
-        self.val_transformations = torch.jit.script(vtransformations)
+        self.first_trans = torch.jit.script(self.first_trans)
 
     @staticmethod
     def stage(queue, saved_dict):
@@ -132,11 +130,12 @@ class DroneImages(torch.utils.data.Dataset):
             "masks": masks,  # UIntTensor[N, H, W]
         }
         x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
-
+        # x -> (R,G,B,T,H) x height x width
+        x, y = self.first_trans(x, y)
+        grey = self.grey(x[:3])
+        x = torch.cat([grey, x[3:]])
         if self.train:
-            x, y = self.transformations(x, y)
-        else:
-            x, y = self.val_transformations(x, y)
+            self.transformations(x, y)
         return x, y
 
 
