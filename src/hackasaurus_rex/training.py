@@ -6,6 +6,7 @@ import torch.optim
 import torch.utils.data
 from tqdm import tqdm
 
+from hackasaurus_rex.data import DroneImages
 from hackasaurus_rex.metric import IntersectionOverUnion, to_mask
 
 
@@ -89,6 +90,10 @@ def train(hyperparameters):
     print(f"Training on {device}")
 
     # TODO: set up the dataset
+    drone_images = DroneImages(hyperparameters["data_root"])
+    train_data, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2])
+    train_data.train = True
+    test_data.train = False
     train_loader, test_loader = None, None
 
     # TODO: initialize the model
@@ -129,6 +134,10 @@ def train(hyperparameters):
 def eval(hyperparameters):
     set_seed(hyperparameters["seed"])
     device = get_device()
+
+    drone_images = DroneImages(hyperparameters["data_root"])
+    _, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2], torch.Generator().manual_seed(42))
+    test_data.train = False
 
     test_loader = None
     model = load_model(hyperparameters)
