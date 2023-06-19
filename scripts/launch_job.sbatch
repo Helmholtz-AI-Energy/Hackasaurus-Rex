@@ -7,7 +7,8 @@
 #SBATCH --exclusive
 #SBATCH --time=04:00:00
 #SBATCH --job-name=hackasaurous
-#SBATCH --partition=normal
+#SBATCH --partition=accelerated
+#SBATCH --reservation=aihero-gpu
 # TODO: UPDATE OUTPUT!!
 #SBATCH --output="/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared/slurm_logs/slurm-%j"
 #####SBATCH --output="/hkfs/work/workspace/scratch/qv2382-madonna/madonna/logs/slurm/slurm-%j"
@@ -56,4 +57,3 @@ export NCCL_COLLNET_ENABLE=0
 export CONFIG_NAME="ortho_train.yaml"
 
 srun "${SRUN_PARAMS[@]}" bash -c "export CONFIG_NAME=${CONFIG_NAME}; python -u ${BASE_DIR}scripts/train.py"
-
