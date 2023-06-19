@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 
 import argparse
+import collections
+import pathlib
 import random
 
 import numpy as np
 import torch
 import torch.optim
 import torch.utils.data
+import yaml
 from dataset import DroneImages
 from metric import IntersectionOverUnion, to_mask
 from model import MaskRCNN
@@ -21,7 +24,7 @@ def get_device() -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def train(hyperparameters: argparse.Namespace):
+def train(hyperparameters):
     # set fixed seeds for reproducible execution
     random.seed(hyperparameters.seed)
     np.random.seed(hyperparameters.seed)
@@ -112,18 +115,10 @@ def train(hyperparameters: argparse.Namespace):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-b", "--batch", default=1, help="batch size", type=int)
-    # parser.add_argument('-e', '--epochs', default=100, help='number of training epochs', type=int)
-    parser.add_argument("-e", "--epochs", default=10, help="number of training epochs", type=int)
-    parser.add_argument("-l", "--lr", default=1e-4, help="learning rate of the optimizer", type=float)
-    parser.add_argument("-s", "--seed", default=42, help="constant random seed for reproduction", type=int)
-    # parser.add_argument('root', help='path to the data root', type=str)
-    parser.add_argument(
-        "--root",
-        default="/hkfs/work/workspace/scratch/dz4120-energy-train-data/",
-        help="path to the data root",
-        type=str,
-    )
-
+    parser.add_argument("-c", "--config", help="Path to the config file", type=pathlib.Path)
     arguments = parser.parse_args()
-    train(arguments)
+
+    with open(arguments.config, "r") as yaml_file:
+        config = collections.namedtuple(yaml.safe_load(yaml_file))
+
+    train(config)
