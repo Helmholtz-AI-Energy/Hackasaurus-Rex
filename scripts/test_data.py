@@ -30,6 +30,11 @@ train_data, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2])
 train_data.train = True
 test_data.train = False
 
+
+def collate_fn(batch):
+    return tuple(zip(*batch))
+
+
 # Dataloaders -------------------------------------------------------------------------
 train_sampler = None
 shuffle = True
@@ -44,28 +49,29 @@ train_loader = torch.utils.data.DataLoader(
     num_workers=6,
     pin_memory=True,
     sampler=train_sampler,
-    persistent_workers=hyperparameters["data"]["persistent_workers"],
-    prefetch_factor=hyperparameters["data"]["prefetch_factor"],
+    persistent_workers=True,
+    collate_fn=collate_fn,
+    prefetch_factor=4,
 )
 
-test_sampler = None
-shuffle = False
-if dist.is_initialized():
-    test_sampler = datadist.DistributedSampler(test_data)
+# test_sampler = None
+# shuffle = False
+# if dist.is_initialized():
+#     test_sampler = datadist.DistributedSampler(test_data)
 
-test_loader = torch.utils.data.DataLoader(
-    test_data,
-    batch_size=hyperparameters["data"]["batch_size"],
-    shuffle=shuffle,
-    num_workers=6,
-    pin_memory=True,
-    sampler=test_sampler,
-    persistent_workers=hyperparameters["data"]["persistent_workers"],
-    prefetch_factor=hyperparameters["data"]["prefetch_factor"],
-)
+# test_loader = torch.utils.data.DataLoader(
+#     test_data,
+#     batch_size=hyperparameters["data"]["batch_size"],
+#     shuffle=shuffle,
+#     num_workers=hyperparameters["data"]["workers"],
+#     pin_memory=True,
+#     sampler=test_sampler,
+#     persistent_workers=hyperparameters["data"]["persistent_workers"],
+#     prefetch_factor=hyperparameters["data"]["prefetch_factor"],
+# )
 
 for i in range(4):
     t0 = time.perf_counter()
     for j, _ in enumerate(train_loader):
-        pass
+        print(j, len(train_loader))
     print(f"Time to load run {i} -> {time.perf_counter() - t0}")

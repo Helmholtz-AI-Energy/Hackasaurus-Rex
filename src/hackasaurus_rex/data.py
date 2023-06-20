@@ -2,7 +2,7 @@ import glob
 import json
 import os
 import random
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, set_start_method
 from pathlib import Path
 from typing import Tuple
 
@@ -28,15 +28,19 @@ class DroneImages(torch.utils.data.Dataset):
         self.check_staged = {name: False for name in self.ids}
         self.staging_proc = Process(target=self.stage, args=(self.queue, self.check_staged))
         self.staging_proc.start()
+
+        # print('testing that staging proc is alive', self.staging_proc.is_alive())
+
         _default_means = [130.0, 135.0, 135.0, 118.0, 118.0]
         _default_vars = [44.0, 40.0, 40.0, 30.0, 21.0]
         self.train = train
         self.first_trans = transv2.Compose(
             [
-                transv2.ToTensor(),
-                transforms.Normalize(_default_means, _default_vars),
+                transv2.ToImageTensor(),
+                transv2.ConvertImageDtype(),
             ]
         )
+        self.norm = transforms.Normalize(_default_means, _default_vars)
 
         self.transformations = transv2.Compose(
             [
@@ -56,10 +60,10 @@ class DroneImages(torch.utils.data.Dataset):
         while True:
             target, arr, name = queue.get()
             if not os.path.exists(target):
-                arr.save(target)
+                np.save(target, arr)
                 saved_dict[name] = True
-            if all(saved_dict):
-                return
+            # if all(saved_dict):
+            #     return
 
     def parse_json(self, path: Path):
         """
@@ -100,10 +104,10 @@ class DroneImages(torch.utils.data.Dataset):
 
         # deserialize the image from disk
         x = np.load(self.images[image_id])
-        if self.staging_proc.is_alive():
-            save_loc = self.tmp_dir / image_id
-            self.queue.put((save_loc, x, image_id))
-            self.images[image_id] = save_loc
+        # if self.staging_proc.is_alive():
+        save_loc = self.tmp_dir / f"{image_id}.npy"
+        self.queue.put((save_loc, x, image_id))
+        self.images[image_id] = save_loc
 
         x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
         polys = self.polys[image_id]
@@ -139,6 +143,7 @@ class DroneImages(torch.utils.data.Dataset):
 
         # x -> (R,G,B,T,H) x height x width
         x, y = self.first_trans(x, y)
+        x = self.norm(x)
         grey = self.grey(x[:3])
         x = torch.cat([grey, x[3:]])
         x, y = self.resize(x, y)

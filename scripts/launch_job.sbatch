@@ -25,15 +25,15 @@ DATA_DIR="/hkfs/work/workspace/scratch/ih5525-energy-train-data"
 TOMOUNT="${BASE_DIR},${DATA_DIR},"
 TOMOUNT+="/scratch,/tmp,"
 #TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-dlrt/datasets"
-TOMOUNT+='/etc/slurm/task_prolog.hk,'
-TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-hackathon/"
+TOMOUNT+='/etc/slurm/task_prolog.hk'
+# TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/"
 export TOMOUNT="${TOMOUNT}"
 
 SRUN_PARAMS=(
   --mpi="pmix"  # TODO: unknown if pmix is there or not!!
   --cpus-per-task=16  # TODO: num
   #--cpu-bind="ldoms"
-  --gpu-bind="closest"
+  # --gpu-bind="closest"
   --label
   --container-name=torch
   --container-writable
