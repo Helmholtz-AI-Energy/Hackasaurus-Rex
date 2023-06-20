@@ -2,14 +2,17 @@ import glob
 import json
 import os
 import random
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, set_start_method
 from pathlib import Path
 from typing import Tuple
 
-import h5py as h5
 import numpy as np
 import torch
 import torchvision
+from torchvision import datapoints
+
+torchvision.disable_beta_transforms_warning()
+import torchvision.transforms.v2 as transv2
 from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
@@ -25,23 +28,31 @@ class DroneImages(torch.utils.data.Dataset):
         self.check_staged = {name: False for name in self.ids}
         self.staging_proc = Process(target=self.stage, args=(self.queue, self.check_staged))
         self.staging_proc.start()
+
+        # print('testing that staging proc is alive', self.staging_proc.is_alive())
+
         _default_means = [130.0, 135.0, 135.0, 118.0, 118.0]
         _default_vars = [44.0, 40.0, 40.0, 30.0, 21.0]
         self.train = train
-        self.first_trans = torch.nn.Sequential(
-            transforms.v2.ToTensor(),
-            transforms.Normalize(_default_means, _default_vars),
+        self.first_trans = transv2.Compose(
+            [
+                transv2.ToImageTensor(),
+                transv2.ConvertImageDtype(),
+            ]
         )
+        self.norm = transforms.Normalize(_default_means, _default_vars)
 
-        transformations = torch.nn.Sequential(
-            transforms.v2.RandomHorizontalFlip(p=0.5),
-            transforms.v2.RandomVerticalFlip(p=0.5),
-            # transforms.v2.RandomRotation(90),
+        self.transformations = transv2.Compose(
+            [
+                transv2.RandomHorizontalFlip(p=0.5),
+                transv2.RandomVerticalFlip(p=0.5),
+                # transv2.RandomRotation(90),
+            ]
         )
-        self.first_trans = torch.jit.script(self.first_trans)
-        self.grey = transforms.Greyscale()
-        self.resize = transforms.v2.Resize((1340, 1685))
-        self.transformations = torch.jit.script(transformations)
+        # self.first_trans = torch.jit.script(self.first_trans)
+        self.grey = transforms.Grayscale()
+        self.resize = transv2.Resize((1340, 1685))
+        # self.transformations = torch.jit.script(transformations)
 
     @staticmethod
     def stage(queue, saved_dict):
@@ -49,10 +60,10 @@ class DroneImages(torch.utils.data.Dataset):
         while True:
             target, arr, name = queue.get()
             if not os.path.exists(target):
-                arr.save(target)
+                np.save(target, arr)
                 saved_dict[name] = True
-            if all(saved_dict):
-                return
+            # if all(saved_dict):
+            #     return
 
     def parse_json(self, path: Path):
         """
@@ -93,50 +104,51 @@ class DroneImages(torch.utils.data.Dataset):
 
         # deserialize the image from disk
         x = np.load(self.images[image_id])
-        if self.staging_proc.is_alive():
-            save_loc = self.tmp_dir / image_id
-            self.queue.put((save_loc, x, image_id))
-            self.images[image_id] = save_loc
+        # if self.staging_proc.is_alive():
+        save_loc = self.tmp_dir / f"{image_id}.npy"
+        self.queue.put((save_loc, x, image_id))
+        self.images[image_id] = save_loc
 
+        x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
         polys = self.polys[image_id]
         bboxes = self.bboxes[image_id]
-        masks = []
-        # generate the segmentation mask on the fly
-        for poly in polys:
-            mask = Image.new(
-                "L",
-                (
-                    x.shape[1],
-                    x.shape[0],
-                ),
-                color=0,
-            )
-            draw = ImageDraw.Draw(mask)
-            draw.polygon(poly[0], fill=1, outline=1)
-            masks.append(np.array(mask))
+        # masks = []
+        # # generate the segmentation mask on the fly
+        # for poly in polys:
+        #     mask = Image.new(
+        #         "L",
+        #         (
+        #             x.shape[1],
+        #             x.shape[0],
+        #         ),
+        #         color=0,
+        #     )
+        #     draw = ImageDraw.Draw(mask)
+        #     draw.polygon(poly[0], fill=1, outline=1)
+        #     masks.append(np.array(mask))
 
-        masks = torch.tensor(np.array(masks))
+        # masks = torch.tensor(np.array(masks))
+        masks = torch.empty((0, x.shape[-2], x.shape[-1]))
 
         labels = torch.tensor([1 for a in polys], dtype=torch.int64)
 
         boxes = torch.tensor(bboxes, dtype=torch.float)
-        # bounding boxes are given as [x, y, w, h] but rcnn expects [x1, y1, x2, y2]
-        boxes[:, 2] = boxes[:, 0] + boxes[:, 2]
-        boxes[:, 3] = boxes[:, 1] + boxes[:, 3]
+        boxes = datapoints.BoundingBox(boxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.XYWH)
 
         y = {
             "boxes": boxes,  # FloatTensor[N, 4]
             "labels": labels,  # Int64Tensor[N]
-            "masks": masks,  # UIntTensor[N, H, W]
+            "masks": masks.to(dtype=x.dtype, device=x.device),  # UIntTensor[N, H, W]
         }
-        x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
+
         # x -> (R,G,B,T,H) x height x width
         x, y = self.first_trans(x, y)
+        x = self.norm(x)
         grey = self.grey(x[:3])
         x = torch.cat([grey, x[3:]])
-        x = self.resize(x)
+        x, y = self.resize(x, y)
         if self.train:
-            self.transformations(x, y)
+            x, y = self.transformations(x, y)
         return x, y
 
 

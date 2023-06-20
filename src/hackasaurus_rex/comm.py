@@ -163,7 +163,7 @@ def init(method, ranks_per_gpu=1, batchnorm_group_size=1, batchnorm_group_stride
     os.environ["MASTER_PORT"] = str(port)
 
     comm_size = 4  # os.environ["MASTER_ADDR"]  # mpi_comm.Get_size()
-    comm_rank = os.environ["SLURM_PROCID"]  # mpi_comm.Get_rank()
+    comm_rank = int(os.environ["SLURM_PROCID"])  # mpi_comm.Get_rank()
 
     nccl_world_size = comm_size
     nccl_world_rank = comm_rank

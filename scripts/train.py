@@ -5,8 +5,8 @@ import pathlib
 
 import yaml
 
-from src.hackasaurus_rex import comm
-from src.hackasaurus_rex.training import train
+from hackasaurus_rex import comm
+from hackasaurus_rex.training import train
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

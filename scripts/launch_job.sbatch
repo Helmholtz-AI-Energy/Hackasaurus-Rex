@@ -9,29 +9,31 @@
 #SBATCH --job-name=hackasaurous
 #SBATCH --partition=accelerated
 #SBATCH --reservation=aihero-gpu
+#SBATCH --account=hk-project-test-aihero2
 # TODO: UPDATE OUTPUT!!
 #SBATCH --output="/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared/slurm_logs/slurm-%j"
 #####SBATCH --output="/hkfs/work/workspace/scratch/qv2382-madonna/madonna/logs/slurm/slurm-%j"
 
 ml purge
 
-# pmi2 cray_shasta
-BASE_DIR="/hkfs/work/workspace/scratch/qv2382-madonna/"
-# export EXT_DATA_PREFIX="/hkfs/home/dataset/datasets/"
-# BASE_DIR="/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared/"
+BASE_DIR="/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared"
+DATA_DIR="/hkfs/work/workspace/scratch/ih5525-energy-train-data"
 
-# TOMOUNT='/etc/slurm/task_prolog.hk:/etc/slurm/task_prolog.hk,'
-# TOMOUNT+="${EXT_DATA_PREFIX},"
-TOMOUNT="${BASE_DIR},"
+#export EXT_DATA_PREFIX="/hkfs/home/dataset/datasets/"
+#TOMOUNT+="${EXT_DATA_PREFIX},"
+
+TOMOUNT="${BASE_DIR},${DATA_DIR},"
 TOMOUNT+="/scratch,/tmp,"
 #TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-dlrt/datasets"
+TOMOUNT+='/etc/slurm/task_prolog.hk'
+# TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/"
 export TOMOUNT="${TOMOUNT}"
 
 SRUN_PARAMS=(
   --mpi="pmix"  # TODO: unknown if pmix is there or not!!
   --cpus-per-task=16  # TODO: num
   #--cpu-bind="ldoms"
-  --gpu-bind="closest"
+  # --gpu-bind="closest"
   --label
   --container-name=torch
   --container-writable
@@ -54,6 +56,6 @@ export NCCL_COLLNET_ENABLE=0
 # export CUDA_VISIBLE_DEVICES="0,1,2,3"
 
 # TODO: make sure to update teh config and the call below this
-export CONFIG_NAME="ortho_train.yaml"
+# export CONFIG_NAME="ortho_train.yaml"
 
-srun "${SRUN_PARAMS[@]}" bash -c "export CONFIG_NAME=${CONFIG_NAME}; python -u ${BASE_DIR}scripts/train.py"
+srun "${SRUN_PARAMS[@]}" bash -c "python -u /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/test_data.py"

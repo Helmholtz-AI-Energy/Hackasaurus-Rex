@@ -48,7 +48,8 @@ DATA_DIR="/hkfs/work/workspace/scratch/ih5525-energy-train-data"
 
 TOMOUNT="${BASE_DIR},${DATA_DIR},"
 TOMOUNT+="/scratch,/tmp,"  # /opt/intel/lib/intel64,"
-TOMOUNT+='/etc/slurm/task_prolog.hk'
+TOMOUNT+='/etc/slurm/task_prolog.hk,'
+TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-hackathon/"
 
 if [ ${PARTITION} = 'accelerated' ]; then
   export RESEVATION="aihero-gpu"
@@ -59,6 +60,7 @@ fi
 #TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-dlrt/datasets"
 
 salloc --partition=${PARTITION} \
+    --account=hk-project-test-aihero2 \
     --reservation=${RESERVATION} \
     -N "${SLURM_NNODES}" \
     --time "${TIMELIMIT}" \
