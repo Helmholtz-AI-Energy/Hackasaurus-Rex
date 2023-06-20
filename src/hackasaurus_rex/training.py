@@ -34,14 +34,53 @@ def set_seed(seed):
 
 def initialize_model(hyperparameters):
     if hyperparameters["model"] == "yolo":
-        return load_yolo_model(hyperparameters["model_checkpoint"])
+        return load_yolo_model(hyperparameters["model_checkpoint"], freeze=True)
     else:
         raise NotImplementedError(f'Model {hyperparameters["model"]} not supported.')
 
 
-def load_yolo_model(model_checkpoint):
+def load_yolo_model(model_checkpoint, freeze, num_classes=1):
     print(f"Loading YOLO model from {model_checkpoint}")
-    return YOLO(model_checkpoint)
+    model = YOLO(model_checkpoint).model
+    unfreeze(model)
+
+    # adjust detection heads for new number of classes and reset the weights
+    if num_classes != model.nc:
+        detection_heads = model.model[22]
+        for class_prediction_head in detection_heads.cv3:
+            class_prediction_head[0].conv.out_channels = num_classes
+            class_prediction_head[0].bn.num_features = num_classes
+            class_prediction_head[0].conv.reset_parameters()
+            class_prediction_head[0].bn.reset_parameters()
+
+            class_prediction_head[1].conv.in_channels = num_classes
+            class_prediction_head[1].conv.out_channels = num_classes
+            class_prediction_head[1].bn.num_features = num_classes
+            class_prediction_head[1].conv.reset_parameters()
+            class_prediction_head[1].bn.reset_parameters()
+
+            class_prediction_head[2].in_channels = num_classes
+            class_prediction_head[2].out_channels = num_classes
+            class_prediction_head[2].reset_parameters()
+
+    # freeze all but first layer and heads
+    if freeze:
+        # model.0 is the first layer, model.22 are the object detection heads
+        parameters_to_freeze = [
+            parameter
+            for parameter_name, parameter in model.named_parameters()
+            if not (parameter_name.startswith("model.0") or parameter_name.startswith("model.22"))
+        ]
+
+        for param in parameters_to_freeze:
+            param.requires_grad = False
+
+    return model
+
+
+def unfreeze(model):
+    for param in model.parameters():
+        param.requires_grad = True
 
 
 def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler):
@@ -126,6 +165,12 @@ def train(hyperparameters):
     device = get_device()
     print(f"Training on {device}")
 
+    # TODO: initialize the model
+    model = initialize_model(hyperparameters)
+    if dist.is_initialized():
+        model = DDP(model)  # , device_ids=[config.rank])
+    model.to(device)
+
     # TODO: set up the dataset
     drone_images = DroneImages(hyperparameters["data"]["data_root"])
     train_data, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2])
@@ -163,12 +208,6 @@ def train(hyperparameters):
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
     # End Dataloaders ---------------------------------------------------------------------
-
-    # TODO: initialize the model
-    model = initialize_model(hyperparameters)
-    if dist.is_initialized():
-        model = DDP(model)  # , device_ids=[config.rank])
-    model.to(device)
 
     # set up optimization procedure
     optimizer = torch.optim.Adam(model.parameters(), lr=float(hyperparameters["lr"]))
