@@ -36,12 +36,12 @@ class DroneImages(torch.utils.data.Dataset):
         transformations = torch.nn.Sequential(
             transforms.v2.RandomHorizontalFlip(p=0.5),
             transforms.v2.RandomVerticalFlip(p=0.5),
-            transforms.v2.RandomRotation(90),
+            # transforms.v2.RandomRotation(90),
         )
-        self.grey = transforms.Greyscale()
-
-        self.transformations = torch.jit.script(transformations)
         self.first_trans = torch.jit.script(self.first_trans)
+        self.grey = transforms.Greyscale()
+        self.resize = transforms.v2.Resize((1340, 1685))
+        self.transformations = torch.jit.script(transformations)
 
     @staticmethod
     def stage(queue, saved_dict):
@@ -134,6 +134,7 @@ class DroneImages(torch.utils.data.Dataset):
         x, y = self.first_trans(x, y)
         grey = self.grey(x[:3])
         x = torch.cat([grey, x[3:]])
+        x = self.resize(x)
         if self.train:
             self.transformations(x, y)
         return x, y

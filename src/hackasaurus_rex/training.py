@@ -1,11 +1,17 @@
 import random
+import time
 
 import numpy as np
+import pytorch_warmup as warmup
 import torch
+import torch.distributed as dist
 import torch.optim
 import torch.utils.data
+import torch.utils.data.distributed as datadist
 from torch import autocast
 from torch.cuda.amp import GradScaler
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torchvision import transforms
 from tqdm import tqdm
 
 from hackasaurus_rex.data import DroneImages
@@ -42,13 +48,17 @@ def load_model(hyperparameters):
         raise ValueError("Please provide a model checkpoint.")
 
 
-def train_epoch(model, optimizer, train_loader, train_metric, device, scaler):
+def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler):
     # set the model into training mode
     model.train()
+    rank = dist.get_rank() if dist.is_initialized() else 0
 
     # training procedure
     train_loss = 0.0
-    for i, batch in enumerate(tqdm(train_loader, desc="train")):
+    metric_avg = 0.0
+    avg_train_time = time.perf_counter()
+    total_train_time = time.perf_counter()
+    for i, batch in enumerate(train_loader):
         x, labels = batch
         x = list(image.to(device) for image in x)
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
@@ -63,36 +73,58 @@ def train_epoch(model, optimizer, train_loader, train_metric, device, scaler):
         scaler.step(optimizer)
         scaler.update()
 
-        loss.backward()
-        optimizer.step()
+        # loss.backward()
+        # optimizer.step()
+        with warmup_scheduler.dampening():
+            pass
         train_loss += loss.item()
 
         # compute metric
         with torch.no_grad():
             model.eval()
             train_predictions = model(x)
-            train_metric(*to_mask(train_predictions, labels))
+            metric = train_metric(*to_mask(train_predictions, labels)).item()
             model.train()
+        if rank == 0 and (i % 10 == 9 or i == len(train_loader) - 1):
+            print(
+                f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / i:.3f}"
+            )
+        metric_avg += metric
+    if rank == 0:
+        print(
+            f"\nTrain epoch end: metric: {metric_avg / len(train_loader):.4f} total time: "
+            f"{(time.perf_counter() - total_train_time)}s Memory utilized: {torch.cuda.max_memory_allocated()}\n"
+        )
 
     return train_loss
 
 
 def evaluate(model, test_loader, test_metric, device):
+    rank = dist.get_rank() if dist.is_initialized() else 0
     model.eval()
-
-    for i, batch in enumerate(tqdm(test_loader, desc="test ")):
+    iou_avg = 0
+    resize_to_large = transforms.v2.Resize((2680, 3370))
+    for i, batch in enumerate(test_loader):
         x_test, test_label = batch
-        x_test = list(image.to(device) for image in x_test)
-        test_label = [{k: v.to(device) for k, v in label.items()} for label in test_label]
+        x_test, test_label = resize_to_large(x_test, test_label)
+        # x_test = list(image.to(device) for image in x_test)
+        # test_label = [{k: v.to(device) for k, v in label.items()} for label in test_label]
 
         # score_threshold = 0.7
         with torch.no_grad():
             test_predictions = model(x_test)
-            test_metric(*to_mask(test_predictions, test_label))
+            iou = test_metric(*to_mask(test_predictions, test_label))
+            iou_avg += iou
+            if rank == 0 and (i % 10 == 9 or i == len(test_loader) - 1):
+                print(f"Eval step: {i}: Avg iou: {iou_avg / i}")
+    if rank == 0:
+        print(f"End Eval: avg iou: {iou / len(test_loader)}\n")
 
 
 def train(hyperparameters):
     set_seed(hyperparameters["seed"])
+
+    rank = dist.get_rank() if dist.is_initialized() else 0
 
     # determines the execution device, i.e. CPU or GPU
     device = get_device()
@@ -103,14 +135,54 @@ def train(hyperparameters):
     train_data, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2])
     train_data.train = True
     test_data.train = False
-    train_loader, test_loader = None, None
+
+    # Dataloaders -------------------------------------------------------------------------
+    train_sampler = None
+    if dist.is_initialized():
+        train_sampler = datadist.DistributedSampler(train_data)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_data,
+        batch_size=hyperparameters["data"]["batch_size"],
+        shuffle=True,
+        num_workers=6,
+        pin_memory=True,
+        sampler=train_sampler,
+        persistent_workers=hyperparameters["data"]["persistent_workers"],
+        prefetch_factor=hyperparameters["data"]["prefetch_factor"],
+    )
+
+    test_sampler = None
+    if dist.is_initialized():
+        test_sampler = datadist.DistributedSampler(test_data)
+
+    test_loader = torch.utils.data.DataLoader(
+        test_data,
+        batch_size=hyperparameters["data"]["batch_size"],
+        shuffle=False,
+        num_workers=6,
+        pin_memory=True,
+        sampler=test_sampler,
+        persistent_workers=hyperparameters["data"]["persistent_workers"],
+        prefetch_factor=hyperparameters["data"]["prefetch_factor"],
+    )
+    # End Dataloaders ---------------------------------------------------------------------
 
     # TODO: initialize the model
     model = initialize_model(hyperparameters)
+    if dist.is_initialized():
+        model = DDP(model)  # , device_ids=[config.rank])
     model.to(device)
 
     # set up optimization procedure
-    optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters["lr"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=float(hyperparameters["lr"]))
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer,
+        400,
+        gamma=0.1,
+    )
+    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=200)
+
     best_iou = 0.0
 
     train_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
@@ -127,30 +199,47 @@ def train(hyperparameters):
 
         evaluate(model, test_loader, test_metric, device)
 
-        # output the losses
-        print(f"Epoch {epoch}")
-        print(f"\tTrain loss: {train_loss}")
-        print(f"\tTrain IoU:  {train_metric.compute()}")
-        print(f"\tTest IoU:   {test_metric.compute()}")
+        if rank == 0:
+            # output the losses
+            print(f"Epoch {epoch}")
+            print(f"\tTrain loss: {train_loss}")
+            print(f"\tTrain IoU:  {train_metric.compute()}")
+            print(f"\tTest IoU:   {test_metric.compute()}")
 
         # save the best performing model on disk
-        if test_metric.compute() > best_iou:
+        if test_metric.compute() > best_iou and rank == 0:
             best_iou = test_metric.compute()
             print("\tSaving better model\n")
             torch.save(model.state_dict(), "checkpoint.pt")
-        else:
+        elif rank == 0:
             print("\n")
+
+        with warmup_scheduler.dampening():
+            lr_scheduler.step()
 
 
 def eval(hyperparameters):
     set_seed(hyperparameters["seed"])
     device = get_device()
 
-    drone_images = DroneImages(hyperparameters["data_root"])
+    drone_images = DroneImages(hyperparameters["data"]["data_root"])
     _, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2], torch.Generator().manual_seed(42))
     test_data.train = False
 
-    test_loader = None
+    test_sampler = None
+    if dist.is_initialized():
+        test_sampler = datadist.DistributedSampler(test_data)
+
+    test_loader = torch.utils.data.DataLoader(
+        test_data,
+        batch_size=hyperparameters["data"]["batch_size"],
+        shuffle=False,
+        num_workers=6,
+        pin_memory=True,
+        sampler=test_sampler,
+        persistent_workers=hyperparameters["data"]["persistent_workers"],
+        prefetch_factor=hyperparameters["data"]["prefetch_factor"],
+    )
     model = load_model(hyperparameters)
     model.to(device)
 
