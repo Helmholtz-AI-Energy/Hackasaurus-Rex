@@ -28,8 +28,8 @@ class DroneImages(torch.utils.data.Dataset):
         self.queue = Queue()
         self.check_staged = {name: False for name in self.ids}
         self.staging_proc = Process(target=self.stage, args=(self.queue, self.check_staged))
-        self.staging_proc.start()
         self.staging_proc.daemon = True
+        self.staging_proc.start()
 
         # print('testing that staging proc is alive', self.staging_proc.is_alive())
 
