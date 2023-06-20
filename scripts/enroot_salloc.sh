@@ -15,7 +15,7 @@ while test $# -gt 0; do
       echo "--reservation             name of reservation"
       exit 0
       ;;
-    -s|--system) shift; export TRAINING_SYSTEM=$1; shift; ;;
+    -p|--partition) shift; export PARTITION=$1; shift; ;;
     -N|--nodes) shift; export SLURM_NNODES=$1; shift; ;;
     -G|--gpus) shift; export GPUS_PER_NODE=$1; shift; ;;
     -t|--time) shift; export TIMELIMIT=$1; shift; ;;
@@ -38,6 +38,7 @@ export NCCL_SOCKET_IFNAME="ib0"
 export NCCL_COLLNET_ENABLE=0
 
 BASE_DIR="/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared"
+DATA_DIR="/hkfs/work/workspace/scratch/ih5525-energy-train-data"
 
 #export EXT_DATA_PREFIX="/hkfs/home/dataset/datasets/"
 #TOMOUNT='/etc/slurm/task_prolog.hk:/etc/slurm/task_prolog.hk,'
@@ -45,12 +46,19 @@ BASE_DIR="/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared"
 #
 # TODO: update me?
 
-TOMOUNT="${BASE_DIR},"
+TOMOUNT="${BASE_DIR},${DATA_DIR}"
 TOMOUNT+="/scratch,/tmp,"  # /opt/intel/lib/intel64,"
+
+if [ ${PARTITION} = 'accelerated']; then
+  export RESEVATION="aihero-gpu"
+else
+  export RESEVATION="aihero"
+fi
 
 #TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-dlrt/datasets"
 
-salloc --partition=accelerated \
+salloc --partition=${PARTITION} \
+    --reservation=${RESERVATION} \
     -N "${SLURM_NNODES}" \
     --time "${TIMELIMIT}" \
     --gres gpu:"${GPUS_PER_NODE}" \
