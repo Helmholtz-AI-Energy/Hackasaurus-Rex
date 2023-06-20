@@ -1,3 +1,4 @@
+import torchvision
 from transformers import DetrForObjectDetection
 
 
@@ -17,3 +18,8 @@ def load_detr_model(pretrained_weights="facebook/detr-resnet-50", freeze=False):
             param.requires_grad = True
 
     return model
+
+
+def postprocess_detr_ouput(output):
+    boxes = output.pred_boxes
+    return torchvision.ops.box_convert(boxes, "cxcywh", "xywh")
