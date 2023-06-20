@@ -267,6 +267,8 @@ def init(method, ranks_per_gpu=1, batchnorm_group_size=1, batchnorm_group_stride
 def init_and_set_config_rank_size(config):
     size = 1
     rank = 0
+    if config["comm_method"] is None:
+        return rank, size
     if "comm_method" in config and config["comm_method"] == "gloo":
         init(method="gloo")
         rank = dist.get_rank()
