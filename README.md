@@ -8,13 +8,8 @@ In order to set up the necessary environment:
 
 1. install in a container
    ```
-   enroot create -n pyxis_torch /hkfs/work/workspace/scratch/ih5525-E2/nvidia+pytorch+23.05-py3.sqsh
+   enroot create -n pyxis_torch PATH
    ```
-   Allocate a node with interactive script: `./scripts/enroot_salloc -N 1 -G 1`
-   ```
-   pip install ultralitics torchmetrics transformers
-   ```
-   Exit the node
 
 2. To run code, use `scripts/launch_job.sbatch` This will launch a new sbatch job with the specified python job.
 
