@@ -9,6 +9,9 @@ from typing import Tuple
 import numpy as np
 import torch
 import torchvision
+from torchvision import datapoints
+
+torchvision.disable_beta_transforms_warning()
 import torchvision.transforms.v2 as transv2
 from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
@@ -28,20 +31,24 @@ class DroneImages(torch.utils.data.Dataset):
         _default_means = [130.0, 135.0, 135.0, 118.0, 118.0]
         _default_vars = [44.0, 40.0, 40.0, 30.0, 21.0]
         self.train = train
-        self.first_trans = torch.nn.Sequential(
-            transv2.ToTensor(),
-            transforms.Normalize(_default_means, _default_vars),
+        self.first_trans = transv2.Compose(
+            [
+                transv2.ToTensor(),
+                transforms.Normalize(_default_means, _default_vars),
+            ]
         )
 
-        transformations = torch.nn.Sequential(
-            transv2.RandomHorizontalFlip(p=0.5),
-            transv2.RandomVerticalFlip(p=0.5),
-            # transv2.RandomRotation(90),
+        self.transformations = transv2.Compose(
+            [
+                transv2.RandomHorizontalFlip(p=0.5),
+                transv2.RandomVerticalFlip(p=0.5),
+                # transv2.RandomRotation(90),
+            ]
         )
         # self.first_trans = torch.jit.script(self.first_trans)
         self.grey = transforms.Grayscale()
         self.resize = transv2.Resize((1340, 1685))
-        self.transformations = torch.jit.script(transformations)
+        # self.transformations = torch.jit.script(transformations)
 
     @staticmethod
     def stage(queue, saved_dict):
@@ -122,9 +129,7 @@ class DroneImages(torch.utils.data.Dataset):
         labels = torch.tensor([1 for a in polys], dtype=torch.int64)
 
         boxes = torch.tensor(bboxes, dtype=torch.float)
-        # bounding boxes are given as [x, y, w, h] but rcnn expects [x1, y1, x2, y2]
-        boxes[:, 2] = boxes[:, 0] + boxes[:, 2]
-        boxes[:, 3] = boxes[:, 1] + boxes[:, 3]
+        boxes = datapoints.BoundingBox(boxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.XYWH)
 
         y = {
             "boxes": boxes,  # FloatTensor[N, 4]
@@ -136,9 +141,9 @@ class DroneImages(torch.utils.data.Dataset):
         x, y = self.first_trans(x, y)
         grey = self.grey(x[:3])
         x = torch.cat([grey, x[3:]])
-        x = self.resize(x)
+        x, y = self.resize(x, y)
         if self.train:
-            self.transformations(x, y)
+            x, y = self.transformations(x, y)
         return x, y
 
 
