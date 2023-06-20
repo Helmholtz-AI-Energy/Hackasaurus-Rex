@@ -12,7 +12,7 @@ from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision import transforms
-from tqdm import tqdm
+from ultralytics import YOLO
 
 from hackasaurus_rex.data import DroneImages
 from hackasaurus_rex.metric import IntersectionOverUnion, to_mask
@@ -33,19 +33,15 @@ def set_seed(seed):
 
 
 def initialize_model(hyperparameters):
-    # TODO: create and initialize model, also load pretrained weights here
-    pass
-
-
-def load_model(hyperparameters):
-    if "model_checkpoint" in hyperparameters:
-        # TODO: initialize model and load checkpoint
-        model = None
-        print(f"Restoring model checkpoint from {hyperparameters['model_checkpoint']}")
-        model.load_state_dict(torch.load(hyperparameters["model_checkpoint"]))
-        return model
+    if hyperparameters["model"] == "yolo":
+        return load_yolo_model(hyperparameters["model_checkpoint"])
     else:
-        raise ValueError("Please provide a model checkpoint.")
+        raise NotImplementedError(f'Model {hyperparameters["model"]} not supported.')
+
+
+def load_yolo_model(model_checkpoint):
+    print(f"Loading YOLO model from {model_checkpoint}")
+    return YOLO(model_checkpoint)
 
 
 def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler):
@@ -240,7 +236,7 @@ def eval(hyperparameters):
         persistent_workers=hyperparameters["data"]["persistent_workers"],
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
-    model = load_model(hyperparameters)
+    model = initialize_model(hyperparameters)
     model.to(device)
 
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
