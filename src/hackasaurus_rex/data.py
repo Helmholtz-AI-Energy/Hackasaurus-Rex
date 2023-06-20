@@ -9,6 +9,7 @@ from typing import Tuple
 import numpy as np
 import torch
 import torchvision
+import torchvision.transforms.v2 as transv2
 from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
@@ -28,18 +29,18 @@ class DroneImages(torch.utils.data.Dataset):
         _default_vars = [44.0, 40.0, 40.0, 30.0, 21.0]
         self.train = train
         self.first_trans = torch.nn.Sequential(
-            transforms.v2.ToTensor(),
+            transv2.ToTensor(),
             transforms.Normalize(_default_means, _default_vars),
         )
 
         transformations = torch.nn.Sequential(
-            transforms.v2.RandomHorizontalFlip(p=0.5),
-            transforms.v2.RandomVerticalFlip(p=0.5),
-            # transforms.v2.RandomRotation(90),
+            transv2.RandomHorizontalFlip(p=0.5),
+            transv2.RandomVerticalFlip(p=0.5),
+            # transv2.RandomRotation(90),
         )
-        self.first_trans = torch.jit.script(self.first_trans)
-        self.grey = transforms.Greyscale()
-        self.resize = transforms.v2.Resize((1340, 1685))
+        # self.first_trans = torch.jit.script(self.first_trans)
+        self.grey = transforms.Grayscale()
+        self.resize = transv2.Resize((1340, 1685))
         self.transformations = torch.jit.script(transformations)
 
     @staticmethod
