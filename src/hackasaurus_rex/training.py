@@ -153,13 +153,15 @@ def train(hyperparameters):
 
     # Dataloaders -------------------------------------------------------------------------
     train_sampler = None
+    shuffle = False
     if dist.is_initialized():
         train_sampler = datadist.DistributedSampler(train_data)
+        shuffle = True
 
     train_loader = torch.utils.data.DataLoader(
         train_data,
         batch_size=hyperparameters["data"]["batch_size"],
-        shuffle=True,
+        shuffle=shuffle,
         num_workers=6,
         pin_memory=True,
         sampler=train_sampler,
@@ -168,13 +170,14 @@ def train(hyperparameters):
     )
 
     test_sampler = None
+    shuffle = False
     if dist.is_initialized():
         test_sampler = datadist.DistributedSampler(test_data)
 
     test_loader = torch.utils.data.DataLoader(
         test_data,
         batch_size=hyperparameters["data"]["batch_size"],
-        shuffle=False,
+        shuffle=shuffle,
         num_workers=6,
         pin_memory=True,
         sampler=test_sampler,
