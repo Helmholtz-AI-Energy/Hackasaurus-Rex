@@ -86,7 +86,7 @@ class DroneImages(torch.utils.data.Dataset):
         for entry in content["annotations"]:
             image_id = entry["image_id"]
             self.polys.setdefault(image_id, []).append(entry["segmentation"])
-            bbox = torch.tensor(entry["bbox"], dtype=torch.int64)
+            bbox = torch.tensor(entry["bbox"])
             bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="xyxy")
             self.bboxes.setdefault(image_id, []).append(bbox)
 
