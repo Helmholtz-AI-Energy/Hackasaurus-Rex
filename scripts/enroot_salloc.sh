@@ -42,13 +42,13 @@ BASE_DIR="/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared"
 DATA_DIR="/hkfs/work/workspace/scratch/ih5525-energy-train-data"
 
 #export EXT_DATA_PREFIX="/hkfs/home/dataset/datasets/"
-#TOMOUNT='/etc/slurm/task_prolog.hk:/etc/slurm/task_prolog.hk,'
 #TOMOUNT+="${EXT_DATA_PREFIX},"
 #
 # TODO: update me?
 
 TOMOUNT="${BASE_DIR},${DATA_DIR},"
-TOMOUNT+="/scratch,/tmp"  # /opt/intel/lib/intel64,"
+TOMOUNT+="/scratch,/tmp,"  # /opt/intel/lib/intel64,"
+TOMOUNT+='/etc/slurm/task_prolog.hk'
 
 if [ ${PARTITION} = 'accelerated' ]; then
   export RESEVATION="aihero-gpu"
