@@ -26,6 +26,7 @@ done
 if [ -z "${TIMELIMIT}" ]; then TIMELIMIT="8:00:00"; fi
 if [ -z "${GPUS_PER_NODE}" ]; then GPUS_PER_NODE="4"; fi
 if [ -z "${SLURM_NNODES}" ]; then SLURM_NNODES="1"; fi
+if [ -z "${PARTITION}" ]; then PARTITION="accelerated"; fi
 
 
 export CUDA_VISIBLE_DEVICES="0,1,2,3"
@@ -46,10 +47,10 @@ DATA_DIR="/hkfs/work/workspace/scratch/ih5525-energy-train-data"
 #
 # TODO: update me?
 
-TOMOUNT="${BASE_DIR},${DATA_DIR}"
-TOMOUNT+="/scratch,/tmp,"  # /opt/intel/lib/intel64,"
+TOMOUNT="${BASE_DIR},${DATA_DIR},"
+TOMOUNT+="/scratch,/tmp"  # /opt/intel/lib/intel64,"
 
-if [ ${PARTITION} = 'accelerated']; then
+if [ ${PARTITION} = 'accelerated' ]; then
   export RESEVATION="aihero-gpu"
 else
   export RESEVATION="aihero"
