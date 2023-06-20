@@ -9,11 +9,13 @@ import torch.distributed as dist
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed as datadist
+import torchvision
 from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision import transforms
 from ultralytics import YOLO
+from ultralytics.yolo.utils.ops import non_max_suppression
 
 from hackasaurus_rex.data import DroneImages
 from hackasaurus_rex.metric import IntersectionOverUnion, to_mask
@@ -107,6 +109,16 @@ def load_model(hyperparameters, model, optimizer):
         return model
 
 
+def get_bounding_box(prediction, mode):
+    if mode == "yolo":
+        postprocessed_prediction = non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.7)
+        return torch.cat([sample_prediction[:, 0:4] for sample_prediction in postprocessed_prediction])
+        # boxes_for_metric = [{'boxes': sample_prediction[:, 0:4], 'masks': None}
+        #                     for sample_prediction in postprocessed_prediction]
+    else:
+        pass
+
+
 def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler):
     # set the model into training mode
     model.train()
@@ -121,12 +133,13 @@ def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, wa
         x, labels = batch
         x = list(image.to(device) for image in x)
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
+        target_boxes = torch.cat([label["boxes"] for label in labels])
         model.zero_grad()
 
         with autocast(device_type="cuda", dtype=torch.float16, enabled=True):
-            losses = model(x, labels)
-            # TODO: FIXME?
-            loss = sum(loss for loss in losses.values())
+            prediction = model(x)
+            predicted_boxes = get_bounding_box(prediction, mode="yolo")
+            loss = torchvision.ops.generalized_box_iou_loss(predicted_boxes, target_boxes)
         scaler.scale(loss).backward()
 
         scaler.step(optimizer)
