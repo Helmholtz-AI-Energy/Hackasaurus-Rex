@@ -10,6 +10,7 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed as datadist
 import torchvision
+import torchvision.transforms.v2 as transv2
 from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -136,23 +137,31 @@ def train_epoch(
     metric_avg = 0.0
     avg_train_time = time.perf_counter()
     total_train_time = time.perf_counter()
+    resize = transv2.Resize((2680, 3370))
     for i, batch in enumerate(train_loader):
         x, labels = batch
         x = torch.cat([i.unsqueeze(0) for i in x])
         x = x.to(device)
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
-        for l in labels:
-            print(l["boxes"].shape)
-        target_boxes = torch.cat([label["boxes"] for label in labels]).to(device)
+        labels2 = []
+        for lab in labels:
+            labels2.append({k: v.to(device) for k, v in lab.items()})
+            labels[-1]["class_labels"] = torch.tensor([1], dtype=torch.long, device=x.device)
+        # for l in labels:
+        #     print(l["boxes"].shape)
+        # target_boxes = torch.cat([label["boxes"] for label in labels]).to(device)
+
         # print(target_boxes)
         model.zero_grad()
 
         with autocast(device_type="cuda", dtype=torch.float16, enabled=True):
-            prediction = model(x)
-            predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
-            print(predicted_boxes.shape, target_boxes.shape)
-            loss = torchvision.ops.generalized_box_iou_loss(predicted_boxes, target_boxes)
-        scaler.scale(loss).backward()
+            prediction = model(x, labels=labels)
+            # print(prediction)
+            loss = prediction.loss
+            # predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
+            # print(predicted_boxes.shapes, target_boxes.shapes)
+            # loss = torchvision.ops.generalized_box_iou_loss(predicted_boxes, target_boxes)
+        # scaler.scale(loss).backward()
 
         scaler.step(optimizer)
         scaler.update()
@@ -165,13 +174,22 @@ def train_epoch(
 
         # compute metric
         with torch.no_grad():
-            model.eval()
-            train_predictions = model(x)
-            metric = train_metric(*to_mask(train_predictions, labels)).item()
-            model.train()
+            # model.eval()
+            # train_predictions = model(x)
+            # metric needs:
+            #   boxes -> list(dict("boxes"))
+            #   masks ->
+            target_shape = list(x.shape[:-2]) + [2680, 3370]
+            metric_in = [
+                {"boxes": prediction.pred_boxes[i], "masks": torch.empty(target_shape)}
+                for i in range(prediction.pred_boxes.shape[0])
+            ]
+            _, metric_in = resize(x, metric_in)
+            metric = train_metric(*to_mask(metric_in, labels)).item()
+            # model.train()
         if rank == 0:  # and (i % 10 == 9 or i == len(train_loader) - 1):
             print(
-                f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / i:.3f}"
+                f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / (i + 1):.3f}"
             )
         metric_avg += metric
     if rank == 0:
