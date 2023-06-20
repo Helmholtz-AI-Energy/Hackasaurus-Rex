@@ -1,20 +1,19 @@
 from transformers import DetrForObjectDetection
 
 
-def get_pretrained_detr():
-    model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+def load_detr_model(pretrained_weights="facebook/detr-resnet-50", freeze=False):
+    model = DetrForObjectDetection.from_pretrained(pretrained_weights)
+    model.load_state_dict()
 
-    # Unfreeze weights
-    for params in model.bbox_predictor.parameters():
-        params.requires_grad = True
+    if freeze:
+        # Unfreeze weights
+        for param in model.bbox_predictor.parameters():
+            param.requires_grad = True
 
-    for params in model.model.backbone.conv_encoder.model.conv1.parameters():
-        params.requires_grad = True
-
-    return model
-
-
-def get_detr_from_checkpoint(checkpoint_data):
-    model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+        for param in model.model.backbone.conv_encoder.model.conv1.parameters():
+            param.requires_grad = True
+    else:
+        for param in model.parameters():
+            param.requires_grad = True
 
     return model

@@ -16,6 +16,7 @@ from torchvision import transforms
 from ultralytics import YOLO
 
 from hackasaurus_rex.data import DroneImages
+from hackasaurus_rex.detr import load_detr_model
 from hackasaurus_rex.metric import IntersectionOverUnion, to_mask
 
 
@@ -36,6 +37,8 @@ def set_seed(seed):
 def initialize_model(hyperparameters):
     if hyperparameters["model"] == "yolo":
         return load_yolo_model(hyperparameters["pretrained_weights"], freeze=True)
+    elif hyperparameters["model"] == "detr":
+        return load_detr_model(hyperparameters["pretrained_weights"], freeze=True)
     else:
         raise NotImplementedError(f'Model {hyperparameters["model"]} not supported.')
 
