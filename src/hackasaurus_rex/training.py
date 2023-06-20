@@ -292,7 +292,10 @@ def evaluation(hyperparameters):
     device = get_device()
 
     drone_images = DroneImages(hyperparameters["data"]["data_root"])
-    _, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2], torch.Generator().manual_seed(42))
+    if hyperparameters["split_data"]:
+        _, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2], torch.Generator().manual_seed(42))
+    else:
+        test_data = drone_images
     test_data.train = False
 
     test_sampler = None

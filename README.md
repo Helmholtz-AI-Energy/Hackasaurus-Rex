@@ -1,17 +1,4 @@
-[![Project generated with PyScaffold](https://img.shields.io/badge/-PyScaffold-005CA0?logo=pyscaffold)](https://pyscaffold.org/)
-<!-- These are examples of badges you might also want to add to your README. Update the URLs accordingly.
-[![Built Status](https://api.cirrus-ci.com/github/<USER>/hackasaurus-rex.svg?branch=main)](https://cirrus-ci.com/github/<USER>/hackasaurus-rex)
-[![ReadTheDocs](https://readthedocs.org/projects/hackasaurus-rex/badge/?version=latest)](https://hackasaurus-rex.readthedocs.io/en/stable/)
-[![Coveralls](https://img.shields.io/coveralls/github/<USER>/hackasaurus-rex/main.svg)](https://coveralls.io/r/<USER>/hackasaurus-rex)
-[![PyPI-Server](https://img.shields.io/pypi/v/hackasaurus-rex.svg)](https://pypi.org/project/hackasaurus-rex/)
-[![Conda-Forge](https://img.shields.io/conda/vn/conda-forge/hackasaurus-rex.svg)](https://anaconda.org/conda-forge/hackasaurus-rex)
-[![Monthly Downloads](https://pepy.tech/badge/hackasaurus-rex/month)](https://pepy.tech/project/hackasaurus-rex)
-[![Twitter](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Twitter)](https://twitter.com/hackasaurus-rex)
--->
-
 # hackasaurus-rex
-
-> Add a short description here!
 
 A longer description of your project goes here...
 
@@ -21,51 +8,25 @@ In order to set up the necessary environment:
 
 1. review and uncomment what you need in `environment.yml` and create an environment `hackasaurus-rex` with the help of [conda]:
    ```
-   conda env create -f environment.yml
-   ```
-2. activate the new environment with:
-   ```
-   conda activate hackasaurus-rex
+   enroot create -n pyxis_torch /hkfs/work/workspace/scratch/ih5525-E2/nvidia+pytorch+23.05-py3.sqsh
+   pip install ultralitics torchmetrics transformers
    ```
 
-> **_NOTE:_**  The conda environment will have hackasaurus-rex installed in editable mode.
-> Some changes, e.g. in `setup.cfg`, might require you to run `pip install -e .` again.
+2. To run code, use `scripts/launch_job.sbatch` This will launch a new sbatch job with the specified python job.
 
+## Running a Testing job
 
-Optional and needed only once after `git clone`:
+1. Make sure that the script in `scripts/launch_job.sbatch` is the target python script
 
-3. install several [pre-commit] git hooks with:
-   ```bash
-   pre-commit install
-   # You might also want to run `pre-commit autoupdate`
-   ```
-   and checkout the configuration under `.pre-commit-config.yaml`.
-   The `-n, --no-verify` flag of `git commit` can be used to deactivate pre-commit hooks temporarily.
+2. Ensure that the config selected in `scripts/launch_job.sbatch` is what you want to run (if you want to run on
+   a different dataset, change the target parameter). If you want to train on the entire dataset you are giving it, make sure to
+   set `split_data` in the config to `False`
 
-4. install [nbstripout] git hooks to remove the output cells of committed notebooks with:
-   ```bash
-   nbstripout --install --attributes notebooks/.gitattributes
-   ```
-   This is useful to avoid large diffs due to plots in your notebooks.
-   A simple `nbstripout --uninstall` will revert these changes.
+3. Once the config is updated, check to make sure that the data is included in the `TOMOUNT` list of paths in `scripts/launch_job.sbatch`.
+   The `TOMOUNT` variable is composed of paths which WHICH ARE SEPERATED BY COMMAS!
 
+4. launch the job with `sbatch scripts/launch_job.sbatch`
 
-Then take a look into the `scripts` and `notebooks` folders.
-
-## Dependency Management & Reproducibility
-
-1. Always keep your abstract (unpinned) dependencies updated in `environment.yml` and eventually
-   in `setup.cfg` if you want to ship and install your package via `pip` later on.
-2. Create concrete dependencies as `environment.lock.yml` for the exact reproduction of your
-   environment with:
-   ```bash
-   conda env export -n hackasaurus-rex -f environment.lock.yml
-   ```
-   For multi-OS development, consider using `--no-builds` during the export.
-3. Update your current environment with respect to a new `environment.lock.yml` using:
-   ```bash
-   conda env update -f environment.lock.yml --prune
-   ```
 ## Project Organization
 
 ```
