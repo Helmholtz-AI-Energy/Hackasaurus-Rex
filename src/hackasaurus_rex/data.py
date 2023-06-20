@@ -53,7 +53,7 @@ class DroneImages(torch.utils.data.Dataset):
         )
         # self.first_trans = torch.jit.script(self.first_trans)
         self.grey = transforms.Grayscale()
-        self.resize = transv2.Resize((1340, 1685))
+        self.resize = transv2.Resize((1344, 1696))
         # self.transformations = torch.jit.script(transformations)
 
     @staticmethod
