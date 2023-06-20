@@ -17,6 +17,7 @@ import torchvision.transforms.v2 as transv2
 from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from torchvision.datasets import VisionDataset
 
 
 class DroneImages(torch.utils.data.Dataset):

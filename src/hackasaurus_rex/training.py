@@ -146,7 +146,7 @@ def train_epoch(
         labels2 = []
         for lab in labels:
             labels2.append({k: v.to(device) for k, v in lab.items()})
-            labels[-1]["class_labels"] = torch.tensor([1], dtype=torch.long, device=x.device)
+            labels2[-1]["class_labels"] = lab["labels"]
         # for l in labels:
         #     print(l["boxes"].shape)
         # target_boxes = torch.cat([label["boxes"] for label in labels]).to(device)
@@ -154,8 +154,8 @@ def train_epoch(
         # print(target_boxes)
         model.zero_grad()
 
-        with autocast(device_type="cuda", dtype=torch.float16, enabled=True):
-            prediction = model(x, labels=labels)
+        with autocast(device_type="cuda", dtype=torch.float16, enabled=False):
+            prediction = model(x, labels=labels2)
             # print(prediction)
             loss = prediction.loss
             # predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
@@ -198,29 +198,44 @@ def train_epoch(
             f"{(time.perf_counter() - total_train_time)}s Memory utilized: {torch.cuda.max_memory_allocated()}\n"
         )
 
-    return train_loss
+    return train_loss, train_metric.compute()
 
 
 def evaluate(model, test_loader, test_metric, device):
     rank = dist.get_rank() if dist.is_initialized() else 0
     model.eval()
     iou_avg = 0
-    resize_to_large = transforms.v2.Resize((2680, 3370))
+    resize = transv2.Resize((2680, 3370))
     for i, batch in enumerate(test_loader):
-        x_test, test_label = batch
-        x_test, test_label = resize_to_large(x_test, test_label)
+        x, labels = batch
+        x = torch.cat([i.unsqueeze(0) for i in x])
+        x = x.to(device)
+        labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
+        labels2 = []
+        for lab in labels:
+            labels2.append({k: v.to(device) for k, v in lab.items()})
+            labels2[-1]["class_labels"] = lab["labels"]
         # x_test = list(image.to(device) for image in x_test)
         # test_label = [{k: v.to(device) for k, v in label.items()} for label in test_label]
 
         # score_threshold = 0.7
         with torch.no_grad():
-            test_predictions = model(x_test)
-            iou = test_metric(*to_mask(test_predictions, test_label))
+            prediction = model(x, labels=labels2)
+            target_shape = list(x.shape[:-2]) + [2680, 3370]
+            metric_in = [
+                {"boxes": prediction.pred_boxes[i], "masks": torch.empty(target_shape)}
+                for i in range(prediction.pred_boxes.shape[0])
+            ]
+            _, metric_in = resize(x, metric_in)
+            iou = test_metric(*to_mask(metric_in, labels)).item()
             iou_avg += iou
-            if rank == 0 and (i % 10 == 9 or i == len(test_loader) - 1):
-                print(f"Eval step: {i}: Avg iou: {iou_avg / i}")
+            if rank == 0:
+                print(f"Eval step: {i}: Avg iou: {iou_avg / (i + 1)}")
+
+    end_iou = test_metric.compute()
     if rank == 0:
-        print(f"End Eval: avg iou: {iou / len(test_loader)}\n")
+        print(f"End Eval: avg iou: {iou_avg / len(test_loader)} - {end_iou}\n")
+    return end_iou
 
 
 def train(hyperparameters):
@@ -258,8 +273,8 @@ def train(hyperparameters):
         train_data,
         batch_size=hyperparameters["data"]["batch_size"],
         shuffle=shuffle,
-        num_workers=6,
-        pin_memory=hyperparameters["data"]["workers"],
+        num_workers=hyperparameters["data"]["workers"],
+        pin_memory=hyperparameters["data"]["pin_memory"],
         sampler=train_sampler,
         persistent_workers=hyperparameters["data"]["persistent_workers"],
         collate_fn=collate_fn,
@@ -276,8 +291,9 @@ def train(hyperparameters):
         batch_size=hyperparameters["data"]["batch_size"],
         shuffle=shuffle,
         num_workers=hyperparameters["data"]["workers"],
-        pin_memory=True,
+        pin_memory=hyperparameters["data"]["pin_memory"],
         sampler=test_sampler,
+        collate_fn=collate_fn,
         persistent_workers=hyperparameters["data"]["persistent_workers"],
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
@@ -301,11 +317,11 @@ def train(hyperparameters):
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
     test_metric = test_metric.to(device)
 
-    scaler = GradScaler(enabled=True)
+    scaler = GradScaler(enabled=False)
 
     # start the actual training procedure
     for epoch in range(hyperparameters["epochs"]):
-        train_loss = train_epoch(
+        train_loss, train_metric_out = train_epoch(
             model,
             optimizer,
             train_loader,
@@ -318,21 +334,21 @@ def train(hyperparameters):
         )
         train_loss /= len(train_loader)
 
-        evaluate(model, test_loader, test_metric, device)
+        test_metric_out = evaluate(model, test_loader, test_metric, device)
 
         if rank == 0:
             # output the losses
             print(f"Epoch {epoch}")
             print(f"\tTrain loss: {train_loss}")
-            print(f"\tTrain IoU:  {train_metric.compute()}")
-            print(f"\tTest IoU:   {test_metric.compute()}")
+            print(f"\tTrain IoU:  {train_metric_out}")
+            print(f"\tTest IoU:   {test_metric_out}")
 
-        # save the best performing model on disk
-        if test_metric.compute() > best_iou and rank == 0:
-            best_iou = test_metric.compute()
-            print("\tSaving better model\n")
-            # torch.save(model.state_dict(), "checkpoint.pt")
-            save_model(hyperparameters, model, optimizer, best_iou, start_time)
+        # # save the best performing model on disk
+        # if test_metric_out > best_iou and rank == 0:
+        # best_iou = test_metric_out
+        # print("\tSaving better model\n")
+        # torch.save(model.state_dict(), "checkpoint.pt")
+        # save_model(hyperparameters, model, optimizer, best_iou, start_time)
         elif rank == 0:
             print("\n")
 

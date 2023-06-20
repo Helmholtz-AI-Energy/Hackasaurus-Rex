@@ -26,7 +26,10 @@ TOMOUNT="${BASE_DIR},${DATA_DIR},"
 TOMOUNT+="/scratch,/tmp,"
 #TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-dlrt/datasets"
 TOMOUNT+='/etc/slurm/task_prolog.hk'
-# TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/"
+TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/"
+TOMOUNT+=",/hkfs/work/workspace/scratch/ih5525-E2/"
+TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/new_modeling_detr.py:/usr/local/lib/python3.10/dist-packages/transformers/models/detr/modeling_detr.py"
+
 export TOMOUNT="${TOMOUNT}"
 
 SRUN_PARAMS=(
@@ -56,6 +59,5 @@ export NCCL_COLLNET_ENABLE=0
 # export CUDA_VISIBLE_DEVICES="0,1,2,3"
 
 # TODO: make sure to update teh config and the call below this
-# export CONFIG_NAME="ortho_train.yaml"
 
-srun "${SRUN_PARAMS[@]}" bash -c "python -u /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/test_data.py"
+srun "${SRUN_PARAMS[@]}" bash -c "python -u /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/train.py -c /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/configs/detr_prot.yml"
