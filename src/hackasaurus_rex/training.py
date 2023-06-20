@@ -35,14 +35,14 @@ def set_seed(seed):
 
 def initialize_model(hyperparameters):
     if hyperparameters["model"] == "yolo":
-        return load_yolo_model(hyperparameters["model_checkpoint"], freeze=True)
+        return load_yolo_model(hyperparameters["pretrained_weights"], freeze=True)
     else:
         raise NotImplementedError(f'Model {hyperparameters["model"]} not supported.')
 
 
-def load_yolo_model(model_checkpoint, freeze, num_classes=1):
-    print(f"Loading YOLO model from {model_checkpoint}")
-    model = YOLO(model_checkpoint).model
+def load_yolo_model(pretrained_weights, freeze, num_classes=1):
+    print(f"Loading YOLO model from {pretrained_weights}")
+    model = YOLO(pretrained_weights).model
     unfreeze(model)
 
     # adjust detection heads for new number of classes and reset the weights
@@ -100,13 +100,11 @@ def save_model(hyperparameters, model, optimizer, best_iou, start_time):
 
 def load_model(hyperparameters, model, optimizer):
     if "model_checkpoint" in hyperparameters:
-        checkpoint = torch.load(hyperparameters["model_checkpoint"])
+        checkpoint = torch.load(hyperparameters["checkpoint_path_in"])
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        print(f"Restoring model checkpoint from {hyperparameters['model_checkpoint']}")
+        print(f"Restoring model checkpoint from {hyperparameters['checkpoint_path_in']}")
         return model
-    # else:
-    #     raise ValueError("Please provide a model checkpoint.")
 
 
 def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler):

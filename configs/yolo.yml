@@ -3,7 +3,9 @@ lr: 1.0e-3
 seed: 42
 
 model: yolo
-model_checkpoint: 'yolov8n.pt'
+pretrained_weights: 'yolov8n.pt'
+# checkpoint_path_in:
+# checkpoint_path_out:
 
 data:
   data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'
