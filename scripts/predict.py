@@ -5,7 +5,7 @@ import pathlib
 
 import yaml
 
-from src.hackasaurus_rex.training import eval
+from src.hackasaurus_rex.training import evaluation
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -15,4 +15,4 @@ if __name__ == "__main__":
     with open(arguments.config, "r") as yaml_file:
         config = yaml.safe_load(yaml_file)
 
-    eval(config)
+    evaluation(config)

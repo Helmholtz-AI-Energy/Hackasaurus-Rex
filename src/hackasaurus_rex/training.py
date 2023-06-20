@@ -190,7 +190,6 @@ def train(hyperparameters):
     device = get_device()
     print(f"Training on {device}")
 
-    # TODO: initialize the model
     model = initialize_model(hyperparameters)
     if dist.is_initialized():
         model = DDP(model)  # , device_ids=[config.rank])
@@ -281,7 +280,7 @@ def train(hyperparameters):
             lr_scheduler.step()
 
 
-def eval(hyperparameters):
+def evaluation(hyperparameters):
     set_seed(hyperparameters["seed"])
     device = get_device()
 
@@ -304,6 +303,7 @@ def eval(hyperparameters):
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
     model = initialize_model(hyperparameters)
+    # TODO: load our model checkpoint
     model.to(device)
 
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
