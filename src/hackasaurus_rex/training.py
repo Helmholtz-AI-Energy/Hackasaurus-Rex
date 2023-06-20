@@ -204,9 +204,9 @@ def train(hyperparameters):
     print(f"Training on {device}")
 
     model = initialize_model(hyperparameters)
+    model.to(device)
     if dist.is_initialized():
         model = DDP(model)  # , device_ids=[config.rank])
-    model.to(device)
 
     # TODO: set up the dataset
     drone_images = DroneImages(hyperparameters["data"]["data_root"])
