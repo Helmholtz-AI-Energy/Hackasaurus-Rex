@@ -6,11 +6,15 @@ A longer description of your project goes here...
 
 In order to set up the necessary environment:
 
-1. review and uncomment what you need in `environment.yml` and create an environment `hackasaurus-rex` with the help of [conda]:
+1. install in a container
    ```
    enroot create -n pyxis_torch /hkfs/work/workspace/scratch/ih5525-E2/nvidia+pytorch+23.05-py3.sqsh
+   ```
+   Allocate a node with interactive script: `./scripts/enroot_salloc -N 1 -G 1`
+   ```
    pip install ultralitics torchmetrics transformers
    ```
+   Exit the node
 
 2. To run code, use `scripts/launch_job.sbatch` This will launch a new sbatch job with the specified python job.
 
