@@ -2,7 +2,10 @@ epochs: 1
 lr: 1.0e-3
 seed: 42
 
-model_checkpoint: '/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared/model/yolov7.pt'
+model: yolo
+pretrained_weights: 'yolov8n.pt'
+# checkpoint_path_in:
+# checkpoint_path_out:
 
 data:
   data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'
