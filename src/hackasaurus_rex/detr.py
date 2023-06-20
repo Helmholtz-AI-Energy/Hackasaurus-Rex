@@ -4,7 +4,7 @@ from transformers import DetrForObjectDetection
 
 def load_detr_model(pretrained_weights="facebook/detr-resnet-50", freeze=False):
     model = DetrForObjectDetection.from_pretrained(pretrained_weights)
-    model.load_state_dict()
+    # model.load_state_dict()
 
     model.class_labels_classifier.out_features = 1
     model.class_labels_classifier.reset_parameters()

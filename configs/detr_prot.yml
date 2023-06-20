@@ -9,10 +9,12 @@ pretrained_weights: "facebook/detr-resnet-50"
 
 data:
   data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'
-  batch_size: 10
+  batch_size: 2
   workers: 6
   pin_memory: True
   persistent_workers: True
   prefetch_factor: 4
 
 split_data: True
+comm_method: null
+mode: detr

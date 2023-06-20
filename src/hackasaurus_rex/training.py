@@ -138,14 +138,19 @@ def train_epoch(
     total_train_time = time.perf_counter()
     for i, batch in enumerate(train_loader):
         x, labels = batch
+        x = torch.cat([i.unsqueeze(0) for i in x])
         x = x.to(device)
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
+        for l in labels:
+            print(l["boxes"].shape)
         target_boxes = torch.cat([label["boxes"] for label in labels]).to(device)
+        # print(target_boxes)
         model.zero_grad()
 
         with autocast(device_type="cuda", dtype=torch.float16, enabled=True):
             prediction = model(x)
             predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
+            print(predicted_boxes.shape, target_boxes.shape)
             loss = torchvision.ops.generalized_box_iou_loss(predicted_boxes, target_boxes)
         scaler.scale(loss).backward()
 
@@ -164,7 +169,7 @@ def train_epoch(
             train_predictions = model(x)
             metric = train_metric(*to_mask(train_predictions, labels)).item()
             model.train()
-        if rank == 0 and (i % 10 == 9 or i == len(train_loader) - 1):
+        if rank == 0:  # and (i % 10 == 9 or i == len(train_loader) - 1):
             print(
                 f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / i:.3f}"
             )
@@ -261,7 +266,7 @@ def train(hyperparameters):
     # End Dataloaders ---------------------------------------------------------------------
 
     # set up optimization procedure
-    optimizer = torch.optim.Adam(model.parameters(), lr=float(hyperparameters["lr"]), fused=True)
+    optimizer = torch.optim.Adam(model.parameters(), lr=float(hyperparameters["lr"]))  # , fused=True)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer,
         400,

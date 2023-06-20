@@ -68,4 +68,4 @@ salloc --partition=${PARTITION} \
     --container-name=torch \
     --container-mounts="${TOMOUNT}" \
     --container-mount-home \
-    --container-writable \
+    --container-writable

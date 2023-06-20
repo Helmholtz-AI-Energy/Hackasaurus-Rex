@@ -1,4 +1,5 @@
 pytorch_warmup==0.1.1
+timm==0.9.2
 torchmetrics==0.11.4
 transformers==4.30.2
 ultralytics==8.0.120

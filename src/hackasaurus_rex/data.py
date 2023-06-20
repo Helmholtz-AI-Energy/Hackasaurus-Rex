@@ -136,7 +136,8 @@ class DroneImages(torch.utils.data.Dataset):
 
         labels = torch.tensor([1 for a in polys], dtype=torch.int64)
 
-        # boxes = torch.tensor(bboxes, dtype=torch.float)
+        bboxes = torch.cat([b.unsqueeze(0) for b in bboxes])
+        # print(bboxes)
         boxes = datapoints.BoundingBox(bboxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.XYXY)
 
         y = {
