@@ -6,7 +6,6 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 from typing import Tuple
 
-import h5py as h5
 import numpy as np
 import torch
 import torchvision
@@ -98,24 +97,26 @@ class DroneImages(torch.utils.data.Dataset):
             self.queue.put((save_loc, x, image_id))
             self.images[image_id] = save_loc
 
+        x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
         polys = self.polys[image_id]
         bboxes = self.bboxes[image_id]
-        masks = []
-        # generate the segmentation mask on the fly
-        for poly in polys:
-            mask = Image.new(
-                "L",
-                (
-                    x.shape[1],
-                    x.shape[0],
-                ),
-                color=0,
-            )
-            draw = ImageDraw.Draw(mask)
-            draw.polygon(poly[0], fill=1, outline=1)
-            masks.append(np.array(mask))
+        # masks = []
+        # # generate the segmentation mask on the fly
+        # for poly in polys:
+        #     mask = Image.new(
+        #         "L",
+        #         (
+        #             x.shape[1],
+        #             x.shape[0],
+        #         ),
+        #         color=0,
+        #     )
+        #     draw = ImageDraw.Draw(mask)
+        #     draw.polygon(poly[0], fill=1, outline=1)
+        #     masks.append(np.array(mask))
 
-        masks = torch.tensor(np.array(masks))
+        # masks = torch.tensor(np.array(masks))
+        masks = torch.empty((0, x.shape[-2], x.shape[-1]))
 
         labels = torch.tensor([1 for a in polys], dtype=torch.int64)
 
@@ -127,9 +128,9 @@ class DroneImages(torch.utils.data.Dataset):
         y = {
             "boxes": boxes,  # FloatTensor[N, 4]
             "labels": labels,  # Int64Tensor[N]
-            "masks": masks,  # UIntTensor[N, H, W]
+            "masks": masks.to(dtype=x.dtype, device=x.device),  # UIntTensor[N, H, W]
         }
-        x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
+
         # x -> (R,G,B,T,H) x height x width
         x, y = self.first_trans(x, y)
         grey = self.grey(x[:3])
