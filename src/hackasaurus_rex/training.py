@@ -1,5 +1,6 @@
 import random
 import time
+from pathlib import Path
 
 import numpy as np
 import pytorch_warmup as warmup
@@ -12,7 +13,6 @@ from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision import transforms
-from tqdm import tqdm
 
 from hackasaurus_rex.data import DroneImages
 from hackasaurus_rex.metric import IntersectionOverUnion, to_mask
@@ -37,15 +37,29 @@ def initialize_model(hyperparameters):
     pass
 
 
-def load_model(hyperparameters):
+def save_model(hyperparameters, model, optimizer, best_iou, start_time):
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    if rank != 0:
+        return
+    fname = f"{start_time}_{best_iou.item()}.pt"
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+        },
+        Path(hyperparameters["checkpoint_path_out"]) / fname,
+    )
+
+
+def load_model(hyperparameters, model, optimizer):
     if "model_checkpoint" in hyperparameters:
-        # TODO: initialize model and load checkpoint
-        model = None
+        checkpoint = torch.load(hyperparameters["model_checkpoint"])
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         print(f"Restoring model checkpoint from {hyperparameters['model_checkpoint']}")
-        model.load_state_dict(torch.load(hyperparameters["model_checkpoint"]))
         return model
-    else:
-        raise ValueError("Please provide a model checkpoint.")
+    # else:
+    #     raise ValueError("Please provide a model checkpoint.")
 
 
 def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler):
@@ -122,6 +136,7 @@ def evaluate(model, test_loader, test_metric, device):
 
 
 def train(hyperparameters):
+    start_time = int(time.time())
     set_seed(hyperparameters["seed"])
 
     rank = dist.get_rank() if dist.is_initialized() else 0
@@ -175,13 +190,15 @@ def train(hyperparameters):
     model.to(device)
 
     # set up optimization procedure
-    optimizer = torch.optim.Adam(model.parameters(), lr=float(hyperparameters["lr"]))
+    optimizer = torch.optim.Adam(model.parameters(), lr=float(hyperparameters["lr"]), fused=True)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer,
         400,
         gamma=0.1,
     )
     warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=200)
+
+    load_model(hyperparameters, model, optimizer)
 
     best_iou = 0.0
 
@@ -210,7 +227,8 @@ def train(hyperparameters):
         if test_metric.compute() > best_iou and rank == 0:
             best_iou = test_metric.compute()
             print("\tSaving better model\n")
-            torch.save(model.state_dict(), "checkpoint.pt")
+            # torch.save(model.state_dict(), "checkpoint.pt")
+            save_model(hyperparameters, model, optimizer, best_iou, start_time)
         elif rank == 0:
             print("\n")
 
