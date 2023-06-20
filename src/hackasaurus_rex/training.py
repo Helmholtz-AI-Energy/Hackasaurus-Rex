@@ -131,9 +131,9 @@ def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, wa
     total_train_time = time.perf_counter()
     for i, batch in enumerate(train_loader):
         x, labels = batch
-        x = list(image.to(device) for image in x)
+        x = x.to(device)
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
-        target_boxes = torch.cat([label["boxes"] for label in labels])
+        target_boxes = torch.cat([label["boxes"] for label in labels]).to(device)
         model.zero_grad()
 
         with autocast(device_type="cuda", dtype=torch.float16, enabled=True):
@@ -275,7 +275,9 @@ def train(hyperparameters):
 
     # start the actual training procedure
     for epoch in range(hyperparameters["epochs"]):
-        train_loss = train_epoch(model, optimizer, train_loader, train_metric, device, scaler)
+        train_loss = train_epoch(
+            model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler
+        )
         train_loss /= len(train_loader)
 
         evaluate(model, test_loader, test_metric, device)
