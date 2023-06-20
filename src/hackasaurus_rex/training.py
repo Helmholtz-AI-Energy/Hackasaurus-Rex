@@ -1,11 +1,14 @@
 import random
 
 import numpy as np
+import pytorch_warmup as warmup
 import torch
+import torch.distributed as dist
 import torch.optim
 import torch.utils.data
 from torch import autocast
 from torch.cuda.amp import GradScaler
+from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 
 from hackasaurus_rex.data import DroneImages
@@ -107,6 +110,8 @@ def train(hyperparameters):
 
     # TODO: initialize the model
     model = initialize_model(hyperparameters)
+    if dist.is_initialized():
+        model = DDP(model)  # , device_ids=[config.rank])
     model.to(device)
 
     # set up optimization procedure

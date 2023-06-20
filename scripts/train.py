@@ -5,6 +5,7 @@ import pathlib
 
 import yaml
 
+from src.hackasaurus_rex import comm
 from src.hackasaurus_rex.training import train
 
 if __name__ == "__main__":
@@ -15,4 +16,7 @@ if __name__ == "__main__":
     with open(arguments.config, "r") as yaml_file:
         config = yaml.safe_load(yaml_file)
 
+    rank, size = comm.init_and_set_config_rank_size(config)
+    config["world_size"] = size
+    config["rank"] = rank
     train(config)
