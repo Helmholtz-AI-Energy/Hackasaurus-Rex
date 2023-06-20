@@ -1,6 +1,0 @@
-batch_size: 1
-epochs: 1
-lr: 1e-4
-seed: 42
-
-data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'

@@ -1,0 +1,13 @@
+epochs: 1
+lr: 1.0e-3
+seed: 42
+
+model_checkpoint: '/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared/model/yolov7.pt'
+
+data:
+  data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'
+  batch_size: 10
+  workers: 6
+  pin_memory: True
+  persistent_workers: True
+  prefetch_factor: 4
