@@ -1,0 +1,18 @@
+epochs: 1
+lr: 1.0e-3
+seed: 42
+
+model: detr
+pretrained_weights: "facebook/detr-resnet-50"
+# checkpoint_path_in:
+# checkpoint_path_out:
+
+data:
+  data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'
+  batch_size: 10
+  workers: 6
+  pin_memory: True
+  persistent_workers: True
+  prefetch_factor: 4
+
+split_data: True

@@ -18,7 +18,7 @@ from ultralytics import YOLO
 from ultralytics.yolo.utils.ops import non_max_suppression
 
 from hackasaurus_rex.data import DroneImages
-from hackasaurus_rex.detr import load_detr_model
+from hackasaurus_rex.detr import load_detr_model, postprocess_detr_ouput
 from hackasaurus_rex.metric import IntersectionOverUnion, to_mask
 
 
@@ -118,11 +118,15 @@ def get_bounding_box(prediction, mode):
         return torch.cat([sample_prediction[:, 0:4] for sample_prediction in postprocessed_prediction])
         # boxes_for_metric = [{'boxes': sample_prediction[:, 0:4], 'masks': None}
         #                     for sample_prediction in postprocessed_prediction]
+    elif mode == "detr":
+        return postprocess_detr_ouput(prediction)
     else:
-        pass
+        raise NotImplementedError("What are you doing here!")
 
 
-def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler):
+def train_epoch(
+    model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler, hyperparameters
+):
     # set the model into training mode
     model.train()
     rank = dist.get_rank() if dist.is_initialized() else 0
@@ -141,7 +145,7 @@ def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, wa
 
         with autocast(device_type="cuda", dtype=torch.float16, enabled=True):
             prediction = model(x)
-            predicted_boxes = get_bounding_box(prediction, mode="yolo")
+            predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
             loss = torchvision.ops.generalized_box_iou_loss(predicted_boxes, target_boxes)
         scaler.scale(loss).backward()
 
@@ -279,7 +283,15 @@ def train(hyperparameters):
     # start the actual training procedure
     for epoch in range(hyperparameters["epochs"]):
         train_loss = train_epoch(
-            model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler
+            model,
+            optimizer,
+            train_loader,
+            train_metric,
+            device,
+            scaler,
+            warmup_scheduler,
+            lr_scheduler,
+            hyperparameters,
         )
         train_loss /= len(train_loader)
 
