@@ -146,7 +146,7 @@ def train(hyperparameters):
     print(f"Training on {device}")
 
     # TODO: set up the dataset
-    drone_images = DroneImages(hyperparameters["data_root"])
+    drone_images = DroneImages(hyperparameters["data"]["data_root"])
     train_data, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2])
     train_data.train = True
     test_data.train = False
