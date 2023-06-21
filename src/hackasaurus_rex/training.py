@@ -105,11 +105,13 @@ def save_model(hyperparameters, model, optimizer, best_iou, start_time):
     )
 
 
-def load_model(hyperparameters, model, optimizer):
-    if "model_checkpoint" in hyperparameters:
+def load_model(hyperparameters, model, optimizer=None):
+    if "checkpoint_path_in" in hyperparameters:
+        print(f"Loading model checkpoint from {hyperparameters['checkpoint_path_in']}")
         checkpoint = torch.load(hyperparameters["checkpoint_path_in"])
         model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        if optimizer:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         print(f"Restoring model checkpoint from {hyperparameters['checkpoint_path_in']}")
         return model
 
@@ -405,6 +407,9 @@ def evaluation(hyperparameters):
     set_seed(hyperparameters["seed"])
     device = get_device()
 
+    print(dist.is_initialized())
+    rank = dist.get_rank() if dist.is_initialized() else 0
+
     drone_images = DroneImages(hyperparameters["data"]["data_root"])
     if hyperparameters["split_data"]:
         _, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2], torch.Generator().manual_seed(42))
@@ -420,19 +425,23 @@ def evaluation(hyperparameters):
         test_data,
         batch_size=hyperparameters["data"]["batch_size"],
         shuffle=False,
-        num_workers=6,
-        pin_memory=True,
+        num_workers=hyperparameters["data"]["workers"],
+        pin_memory=hyperparameters["data"]["pin_memory"],
         sampler=test_sampler,
+        collate_fn=collate_fn,
         persistent_workers=hyperparameters["data"]["persistent_workers"],
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
     model = initialize_model(hyperparameters)
-    # TODO: load our model checkpoint
     model.to(device)
+    if dist.is_initialized():
+        model = DDP(model)
+    load_model(hyperparameters, model)
 
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
     test_metric = test_metric.to(device)
 
     evaluate(model, test_loader, test_metric, device)
 
-    print(f"Test IoU: {test_metric.compute()}")
+    if rank == 0:
+        print(f"Test IoU: {test_metric.compute()}")

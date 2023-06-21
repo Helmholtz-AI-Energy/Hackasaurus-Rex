@@ -1,0 +1,18 @@
+seed: 42
+
+model: detr
+pretrained_weights: "facebook/detr-resnet-50"
+checkpoint_path_in:  '/hkfs/work/workspace/scratch/ih5525-E2/Hackasaurus-Rex/models/DETR/1687345071_0.30239906907081604.pt'
+
+data:
+  data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'  # set path to test directory here
+  batch_size: 12
+  workers: 8
+  pin_memory: False
+  persistent_workers: True
+  prefetch_factor: 2
+
+split_data: True  # Change to False for test set
+comm_method: nccl-slurm
+mode: detr
+amp: False
