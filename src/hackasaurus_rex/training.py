@@ -361,6 +361,9 @@ def evaluation(hyperparameters):
     set_seed(hyperparameters["seed"])
     device = get_device()
 
+    print(dist.is_initialized())
+    rank = dist.get_rank() if dist.is_initialized() else 0
+
     drone_images = DroneImages(hyperparameters["data"]["data_root"])
     if hyperparameters["split_data"]:
         _, test_data = torch.utils.data.random_split(drone_images, [0.8, 0.2], torch.Generator().manual_seed(42))
@@ -394,4 +397,5 @@ def evaluation(hyperparameters):
 
     evaluate(model, test_loader, test_metric, device)
 
-    print(f"Test IoU: {test_metric.compute()}")
+    if rank == 0:
+        print(f"Test IoU: {test_metric.compute()}")
