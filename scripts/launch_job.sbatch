@@ -60,4 +60,5 @@ export NCCL_COLLNET_ENABLE=0
 
 # TODO: make sure to update teh config and the call below this
 
-srun "${SRUN_PARAMS[@]}" bash -c "python -u /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/train.py -c /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/configs/detr_prot.yml"
+COMMAND=${COMMAND:-"python -u /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/train.py -c /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/configs/detr_prot.yml"}
+srun "${SRUN_PARAMS[@]}" bash -c ${COMMAND}
