@@ -351,7 +351,7 @@ def train(hyperparameters):
         400,
         gamma=0.1,
     )
-    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=200)
+    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=20)
 
     load_model(hyperparameters, model, optimizer)
 

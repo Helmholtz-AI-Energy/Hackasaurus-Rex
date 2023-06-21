@@ -111,9 +111,9 @@ class DroneImages(torch.utils.data.Dataset):
         # deserialize the image from disk
         x = np.load(self.images[image_id])
         # if self.staging_proc.is_alive():
-        save_loc = self.tmp_dir / f"{image_id}.npy"
-        self.queue.put((save_loc, x, image_id))
-        self.images[image_id] = save_loc
+        # save_loc = self.tmp_dir / f"{image_id}.npy"
+        # self.queue.put((save_loc, x, image_id))
+        # self.images[image_id] = save_loc
 
         x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
         polys = self.polys[image_id]
