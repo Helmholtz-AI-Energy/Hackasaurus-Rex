@@ -12,6 +12,6 @@ data:
   persistent_workers: True
   prefetch_factor: 4
 
-split_data: True
+split_data: True  # Change to False for test set
 comm_method: null
 mode: detr
