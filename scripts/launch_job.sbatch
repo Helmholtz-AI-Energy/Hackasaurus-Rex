@@ -22,13 +22,13 @@ DATA_DIR="/hkfs/work/workspace/scratch/ih5525-energy-train-data"
 #export EXT_DATA_PREFIX="/hkfs/home/dataset/datasets/"
 #TOMOUNT+="${EXT_DATA_PREFIX},"
 
-TOMOUNT="${BASE_DIR},${DATA_DIR},"
+TOMOUNT={$TOMOUNT:-""}
+TOMOUNT+="${BASE_DIR},${DATA_DIR},"
 TOMOUNT+="/scratch,/tmp,"
 #TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-dlrt/datasets"
 TOMOUNT+='/etc/slurm/task_prolog.hk'
 TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/"
 TOMOUNT+=",/hkfs/work/workspace/scratch/ih5525-E2/"
-TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/new_modeling_detr.py:/usr/local/lib/python3.10/dist-packages/transformers/models/detr/modeling_detr.py"
 
 export TOMOUNT="${TOMOUNT}"
 
@@ -61,4 +61,5 @@ export NCCL_COLLNET_ENABLE=0
 # TODO: make sure to update teh config and the call below this
 
 COMMAND=${COMMAND:-"python -u /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/train.py -c /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/configs/detr_prot.yml"}
+echo $COMMAND
 srun "${SRUN_PARAMS[@]}" bash -c ${COMMAND}
