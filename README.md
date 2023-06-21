@@ -7,7 +7,9 @@ Zenodo URL: https://zenodo.org/record/8063997
 To run the prediction:
 
 1. Adjust the config file `configs/detr_prot_predict.yml` and update the `data_root` to point to your data directory.
-2. Run `scripts/predict.sh` to initialize the container and run the testing. The logs should end up in `/hkfs/work/workspace/scratch/ih5525-E2/slurm_logs`.
+2. Once the config is updated, check to make sure that the data location is included in the `TOMOUNT` list of paths in `scripts/launch_job.sbatch`.
+   The `TOMOUNT` variable is composed of paths which WHICH ARE SEPERATED BY COMMAS!
+3. Run `scripts/predict.sh` to initialize the container and run the testing. The logs should end up in `/hkfs/work/workspace/scratch/ih5525-E2/slurm_logs`.
 
 ## Installation
 
@@ -28,10 +30,7 @@ In order to set up the necessary environment:
    a different dataset, change the target parameter). If you want to train on the entire dataset you are giving it, make sure to
    set `split_data` in the config to `False`
 
-3. Once the config is updated, check to make sure that the data is included in the `TOMOUNT` list of paths in `scripts/launch_job.sbatch`.
-   The `TOMOUNT` variable is composed of paths which WHICH ARE SEPERATED BY COMMAS!
-
-4. launch the job with `sbatch scripts/launch_job.sbatch`
+3. launch the job with `sbatch scripts/launch_job.sbatch`
 
 ## Project Organization
 
