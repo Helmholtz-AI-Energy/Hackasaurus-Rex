@@ -2,6 +2,13 @@
 
 Zenodo URL: https://zenodo.org/record/8063997
 
+## Prediction
+
+To run the prediction:
+
+1. Adjust the config file `configs/detr_prot_predict.yml` and update the `data_root` to point to your data directory.
+2. Run `scripts/predict.sh` to initialize the container and run the testing. The logs should end up in `/hkfs/work/workspace/scratch/ih5525-E2/slurm_logs`.
+
 ## Installation
 
 In order to set up the necessary environment:

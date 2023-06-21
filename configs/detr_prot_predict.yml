@@ -12,7 +12,7 @@ data:
   persistent_workers: True
   prefetch_factor: 2
 
-split_data: True  # Change to False for test set
+split_data: False  # Change to False for test set
 comm_method: nccl-slurm
 mode: detr
 amp: False
