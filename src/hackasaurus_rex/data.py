@@ -89,7 +89,7 @@ class DroneImages(torch.utils.data.Dataset):
             image_id = entry["image_id"]
             self.polys.setdefault(image_id, []).append(entry["segmentation"])
             bbox = torch.tensor(entry["bbox"])
-            bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="cxcywh")
+            # bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="cxcywh")
             self.bboxes.setdefault(image_id, []).append(bbox)
 
     def __len__(self) -> int:

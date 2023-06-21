@@ -140,7 +140,7 @@ def bbox_to_oskar(tensor, size):
     tensor[:, 1] *= size[1]
     tensor[:, 3] *= size[1]
 
-    return box_convert(tensor, "cxcywh", "xywh")
+    return box_convert(tensor, "xywh", "xyxy")
 
 
 def train_epoch(
@@ -220,6 +220,7 @@ def train_epoch(
 
             # if i == len(train_loader) - 1:
             #     print(metric_in)
+            #     raise ValueError
             metric = train_metric(*to_mask(metric_in, labels)).item()
             # model.train()
         if rank == 0:  # and (i % 10 == 9 or i == len(train_loader) - 1):
@@ -350,7 +351,7 @@ def train(hyperparameters):
         400,
         gamma=0.1,
     )
-    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=20)
+    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=200)
 
     load_model(hyperparameters, model, optimizer)
 

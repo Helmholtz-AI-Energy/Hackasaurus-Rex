@@ -1,4 +1,4 @@
-epochs: 100
+epochs: 10000
 lr: 1.0e-3
 seed: 42
 

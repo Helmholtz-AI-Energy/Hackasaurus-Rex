@@ -3,8 +3,8 @@ from transformers import DetrConfig, DetrForObjectDetection, DetrModel
 
 
 def load_detr_model(pretrained_weights="facebook/detr-resnet-50", freeze=False):
-    model = DetrForObjectDetection(base_config)
-    # model = DetrForObjectDetection.from_pretrained(pretrained_weights)
+    # model = DetrForObjectDetection(base_config)
+    model = DetrForObjectDetection.from_pretrained(pretrained_weights)
     # model.config.class_cost = 0.0
     # model.config.giou_cost = 0.0
     # model.forward = new_forward
@@ -12,25 +12,25 @@ def load_detr_model(pretrained_weights="facebook/detr-resnet-50", freeze=False):
 
     # # model.class_labels_classifier.out_features = 1
     # model.class_labels_classifier.reset_parameters()
-    # if freeze:
-    #     # Unfreeze weights
-    #     for param in model.class_labels_classifier.parameters():
-    #         param.requires_grad = True
+    if freeze:
+        # Unfreeze weights
+        for param in model.class_labels_classifier.parameters():
+            param.requires_grad = True
 
-    #     for param in model.bbox_predictor.parameters():
-    #         param.requires_grad = True
+        for param in model.bbox_predictor.parameters():
+            param.requires_grad = True
 
-    #     for param in model.model.backbone.conv_encoder.model.conv1.parameters():
-    #         param.requires_grad = True
-    # else:
-    #     for param in model.parameters():
-    #         param.requires_grad = True
+        for param in model.model.backbone.conv_encoder.model.conv1.parameters():
+            param.requires_grad = True
+    else:
+        for param in model.parameters():
+            param.requires_grad = True
 
     return model
 
 
 base_config = DetrConfig(
-    use_timm_backbone=False,
+    use_timm_backbone=True,
     backbone_config=None,
     num_channels=3,
     num_queries=100,
