@@ -104,11 +104,12 @@ def save_model(hyperparameters, model, optimizer, best_iou, start_time):
     )
 
 
-def load_model(hyperparameters, model, optimizer):
+def load_model(hyperparameters, model, optimizer=None):
     if "model_checkpoint" in hyperparameters:
         checkpoint = torch.load(hyperparameters["checkpoint_path_in"])
         model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        if optimizer:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         print(f"Restoring model checkpoint from {hyperparameters['checkpoint_path_in']}")
         return model
 
@@ -382,8 +383,10 @@ def evaluation(hyperparameters):
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
     model = initialize_model(hyperparameters)
-    # TODO: load our model checkpoint
     model.to(device)
+    if dist.is_initialized():
+        model = DDP(model)
+    load_model(hyperparameters, model)
 
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
     test_metric = test_metric.to(device)
