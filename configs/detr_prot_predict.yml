@@ -1,0 +1,17 @@
+seed: 42
+
+model: detr
+pretrained_weights: "facebook/detr-resnet-50"
+# checkpoint_path_in:  # TODO: set the checkpoint here
+
+data:
+  data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'  # set path to test directory here
+  batch_size: 1
+  workers: 6
+  pin_memory: True
+  persistent_workers: True
+  prefetch_factor: 4
+
+split_data: True
+comm_method: null
+mode: detr
