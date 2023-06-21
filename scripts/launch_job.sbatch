@@ -28,7 +28,7 @@ TOMOUNT+="/scratch,/tmp,"
 TOMOUNT+='/etc/slurm/task_prolog.hk'
 TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/"
 TOMOUNT+=",/hkfs/work/workspace/scratch/ih5525-E2/"
-TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/new_modeling_detr.py:/usr/local/lib/python3.10/dist-packages/transformers/models/detr/modeling_detr.py"
+# TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/new_modeling_detr.py:/usr/local/lib/python3.10/dist-packages/transformers/models/detr/modeling_detr.py"
 
 export TOMOUNT="${TOMOUNT}"
 

@@ -41,7 +41,7 @@ def initialize_model(hyperparameters):
     if hyperparameters["model"] == "yolo":
         return load_yolo_model(hyperparameters["pretrained_weights"], freeze=True)
     elif hyperparameters["model"] == "detr":
-        return load_detr_model(hyperparameters["pretrained_weights"], freeze=True)
+        return load_detr_model(hyperparameters["pretrained_weights"], freeze=False)
     else:
         raise NotImplementedError(f'Model {hyperparameters["model"]} not supported.')
 
@@ -138,6 +138,10 @@ def train_epoch(
     avg_train_time = time.perf_counter()
     total_train_time = time.perf_counter()
     resize = transv2.Resize((2680, 3370))
+    # model.train()
+    # if rank == 0:
+    #     for n, p in model.named_parameters():
+    #         print(f"{n}: {p.requires_grad}, {p.mean():.4f} {p.min():.4f} {p.max():.4f}")
     for i, batch in enumerate(train_loader):
         x, labels = batch
         x = torch.cat([i.unsqueeze(0) for i in x])
@@ -156,12 +160,14 @@ def train_epoch(
 
         with autocast(device_type="cuda", dtype=torch.float16, enabled=False):
             prediction = model(x, labels=labels2)
-            # print(prediction)
+            print(prediction)
+            raise ValueError
             loss = prediction.loss
+            # loss.backward
             # predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
             # print(predicted_boxes.shapes, target_boxes.shapes)
             # loss = torchvision.ops.generalized_box_iou_loss(predicted_boxes, target_boxes)
-        # scaler.scale(loss).backward()
+        scaler.scale(loss).backward()
 
         scaler.step(optimizer)
         scaler.update()
@@ -189,7 +195,7 @@ def train_epoch(
             # model.train()
         if rank == 0:  # and (i % 10 == 9 or i == len(train_loader) - 1):
             print(
-                f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / (i + 1):.3f}"
+                f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / (i + 1):.3f} loss {loss.item():.4f}"
             )
         metric_avg += metric
     if rank == 0:
@@ -197,6 +203,9 @@ def train_epoch(
             f"\nTrain epoch end: metric: {metric_avg / len(train_loader):.4f} total time: "
             f"{(time.perf_counter() - total_train_time)}s Memory utilized: {torch.cuda.max_memory_allocated()}\n"
         )
+    # if rank == 0:
+    #     for n, p in model.named_parameters():
+    #         print(f"{n}: {p.requires_grad}, {p.mean():.4f} {p.min():.4f} {p.max():.4f}")
 
     return train_loss, train_metric.compute()
 
@@ -344,11 +353,11 @@ def train(hyperparameters):
             print(f"\tTest IoU:   {test_metric_out}")
 
         # # save the best performing model on disk
-        # if test_metric_out > best_iou and rank == 0:
-        # best_iou = test_metric_out
-        # print("\tSaving better model\n")
-        # torch.save(model.state_dict(), "checkpoint.pt")
-        # save_model(hyperparameters, model, optimizer, best_iou, start_time)
+        if test_metric_out > best_iou and rank == 0:
+            best_iou = test_metric_out
+            print("\tSaving better model\n")
+            torch.save(model.state_dict(), "checkpoint.pt")
+            save_model(hyperparameters, model, optimizer, best_iou, start_time)
         elif rank == 0:
             print("\n")
 
