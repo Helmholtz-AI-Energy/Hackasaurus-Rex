@@ -376,9 +376,10 @@ def evaluation(hyperparameters):
         test_data,
         batch_size=hyperparameters["data"]["batch_size"],
         shuffle=False,
-        num_workers=6,
-        pin_memory=True,
+        num_workers=hyperparameters["data"]["workers"],
+        pin_memory=hyperparameters["data"]["pin_memory"],
         sampler=test_sampler,
+        collate_fn=collate_fn,
         persistent_workers=hyperparameters["data"]["persistent_workers"],
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
