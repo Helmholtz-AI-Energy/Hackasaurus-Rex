@@ -15,6 +15,7 @@ from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision import transforms
+from torchvision.ops import box_convert
 from ultralytics import YOLO
 from ultralytics.yolo.utils.ops import non_max_suppression
 
@@ -41,7 +42,7 @@ def initialize_model(hyperparameters):
     if hyperparameters["model"] == "yolo":
         return load_yolo_model(hyperparameters["pretrained_weights"], freeze=True)
     elif hyperparameters["model"] == "detr":
-        return load_detr_model(hyperparameters["pretrained_weights"], freeze=True)
+        return load_detr_model(hyperparameters["pretrained_weights"], freeze=False)
     else:
         raise NotImplementedError(f'Model {hyperparameters["model"]} not supported.')
 
@@ -126,6 +127,23 @@ def get_bounding_box(prediction, mode):
         raise NotImplementedError("What are you doing here!")
 
 
+def normalize_bbox(tensor, size):
+    tensor[:, 0] /= size[0]
+    tensor[:, 2] /= size[0]
+    tensor[:, 1] /= size[1]
+    tensor[:, 3] /= size[1]
+    return tensor
+
+
+def bbox_to_oskar(tensor, size):
+    tensor[:, 0] *= size[0]
+    tensor[:, 2] *= size[0]
+    tensor[:, 1] *= size[1]
+    tensor[:, 3] *= size[1]
+
+    return box_convert(tensor, "cxcywh", "xywh")
+
+
 def train_epoch(
     model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler, hyperparameters
 ):
@@ -138,7 +156,11 @@ def train_epoch(
     metric_avg = 0.0
     avg_train_time = time.perf_counter()
     total_train_time = time.perf_counter()
-    resize = transv2.Resize((2680, 3370))
+    # resize = transv2.Resize((2680, 3370))
+    # model.train()
+    # if rank == 0:
+    #     for n, p in model.named_parameters():
+    #         print(f"{n}: {p.requires_grad}, {p.mean():.4f} {p.min():.4f} {p.max():.4f}")
     for i, batch in enumerate(train_loader):
         x, labels = batch
         x = torch.cat([i.unsqueeze(0) for i in x])
@@ -146,8 +168,13 @@ def train_epoch(
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
         labels2 = []
         for lab in labels:
-            labels2.append({k: v.to(device) for k, v in lab.items()})
-            labels2[-1]["class_labels"] = lab["labels"]
+            labels2.append({})
+            labels2[-1]["labels"] = lab["labels"].to(device)
+            labels2[-1]["class_labels"] = lab["labels"].to(device)
+            labels2[-1]["masks"] = lab["masks"].to(device)
+            labels2[-1]["boxes"] = normalize_bbox(lab["boxes"], [893, 1123]).to(device)
+            # labels2.append({k: v.to(device) for k, v in lab.items()})
+            # labels2[-1]
         # for l in labels:
         #     print(l["boxes"].shape)
         # target_boxes = torch.cat([label["boxes"] for label in labels]).to(device)
@@ -155,14 +182,15 @@ def train_epoch(
         # print(target_boxes)
         model.zero_grad()
 
-        with autocast(device_type="cuda", dtype=torch.float16, enabled=False):
+        with autocast(device_type="cuda", dtype=torch.float16, enabled=hyperparameters["amp"]):
             prediction = model(x, labels=labels2)
             # print(prediction)
             loss = prediction.loss
+            # loss.backward
             # predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
             # print(predicted_boxes.shapes, target_boxes.shapes)
             # loss = torchvision.ops.generalized_box_iou_loss(predicted_boxes, target_boxes)
-        # scaler.scale(loss).backward()
+        scaler.scale(loss).backward()
 
         scaler.step(optimizer)
         scaler.update()
@@ -181,16 +209,24 @@ def train_epoch(
             #   boxes -> list(dict("boxes"))
             #   masks ->
             target_shape = list(x.shape[:-2]) + [2680, 3370]
+            # if i == len(train_loader) - 1:
+            #     print(prediction)
             metric_in = [
                 {"boxes": prediction.pred_boxes[i], "masks": torch.empty(target_shape)}
                 for i in range(prediction.pred_boxes.shape[0])
             ]
-            _, metric_in = resize(x, metric_in)
+            # _, metric_in = resize(x, metric_in)
+            for c in range(len(metric_in)):
+                metric_in[c]["boxes"] = bbox_to_oskar(metric_in[c]["boxes"], [2680, 3370])
+
+            # if i == len(train_loader) - 1:
+            #     print(metric_in)
             metric = train_metric(*to_mask(metric_in, labels)).item()
             # model.train()
         if rank == 0:  # and (i % 10 == 9 or i == len(train_loader) - 1):
             print(
-                f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / (i + 1):.3f}"
+                f"Train step {i}: metric: {metric:.4f} avg batch time: "
+                f"{(time.perf_counter() - avg_train_time) / (i + 1):.3f} loss {loss.item():.4f}"
             )
         metric_avg += metric
     if rank == 0:
@@ -198,6 +234,9 @@ def train_epoch(
             f"\nTrain epoch end: metric: {metric_avg / len(train_loader):.4f} total time: "
             f"{(time.perf_counter() - total_train_time)}s Memory utilized: {torch.cuda.max_memory_allocated()}\n"
         )
+    # if rank == 0:
+    #     for n, p in model.named_parameters():
+    #         print(f"{n}: {p.requires_grad}, {p.mean():.4f} {p.min():.4f} {p.max():.4f}")
 
     return train_loss, train_metric.compute()
 
@@ -206,7 +245,7 @@ def evaluate(model, test_loader, test_metric, device):
     rank = dist.get_rank() if dist.is_initialized() else 0
     model.eval()
     iou_avg = 0
-    resize = transv2.Resize((2680, 3370))
+    # resize = transv2.Resize((2680, 3370))
     for i, batch in enumerate(test_loader):
         x, labels = batch
         x = torch.cat([i.unsqueeze(0) for i in x])
@@ -214,8 +253,11 @@ def evaluate(model, test_loader, test_metric, device):
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
         labels2 = []
         for lab in labels:
-            labels2.append({k: v.to(device) for k, v in lab.items()})
-            labels2[-1]["class_labels"] = lab["labels"]
+            labels2.append({})
+            labels2[-1]["labels"] = lab["labels"].to(device)
+            labels2[-1]["class_labels"] = lab["labels"].to(device)
+            labels2[-1]["masks"] = lab["masks"].to(device)
+            labels2[-1]["boxes"] = normalize_bbox(lab["boxes"], [893, 1123]).to(device)
         # x_test = list(image.to(device) for image in x_test)
         # test_label = [{k: v.to(device) for k, v in label.items()} for label in test_label]
 
@@ -227,7 +269,9 @@ def evaluate(model, test_loader, test_metric, device):
                 {"boxes": prediction.pred_boxes[i], "masks": torch.empty(target_shape)}
                 for i in range(prediction.pred_boxes.shape[0])
             ]
-            _, metric_in = resize(x, metric_in)
+            # _, metric_in = resize(x, metric_in)
+            for c in range(len(metric_in)):
+                metric_in[c]["boxes"] = bbox_to_oskar(metric_in[c]["boxes"], [2680, 3370])
             iou = test_metric(*to_mask(metric_in, labels)).item()
             iou_avg += iou
             if rank == 0:
@@ -301,13 +345,13 @@ def train(hyperparameters):
     # End Dataloaders ---------------------------------------------------------------------
 
     # set up optimization procedure
-    optimizer = torch.optim.Adam(model.parameters(), lr=float(hyperparameters["lr"]))  # , fused=True)
+    optimizer = torch.optim.Adam(model.parameters(), lr=float(hyperparameters["lr"]), fused=True)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer,
         400,
         gamma=0.1,
     )
-    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=200)
+    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=20)
 
     load_model(hyperparameters, model, optimizer)
 
@@ -318,7 +362,7 @@ def train(hyperparameters):
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
     test_metric = test_metric.to(device)
 
-    scaler = GradScaler(enabled=False)
+    scaler = GradScaler(enabled=hyperparameters["amp"])
 
     # start the actual training procedure
     for epoch in range(hyperparameters["epochs"]):
@@ -345,11 +389,11 @@ def train(hyperparameters):
             print(f"\tTest IoU:   {test_metric_out}")
 
         # # save the best performing model on disk
-        # if test_metric_out > best_iou and rank == 0:
-        # best_iou = test_metric_out
-        # print("\tSaving better model\n")
-        # torch.save(model.state_dict(), "checkpoint.pt")
-        # save_model(hyperparameters, model, optimizer, best_iou, start_time)
+        if test_metric_out > best_iou and rank == 0:
+            best_iou = test_metric_out
+            print("\tSaving better model\n")
+            torch.save(model.state_dict(), "checkpoint.pt")
+            save_model(hyperparameters, model, optimizer, best_iou, start_time)
         elif rank == 0:
             print("\n")
 

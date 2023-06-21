@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.datasets import VisionDataset
+from torchvision.ops import box_convert
 
 
 class DroneImages(torch.utils.data.Dataset):
@@ -88,7 +89,7 @@ class DroneImages(torch.utils.data.Dataset):
             image_id = entry["image_id"]
             self.polys.setdefault(image_id, []).append(entry["segmentation"])
             bbox = torch.tensor(entry["bbox"])
-            bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="xyxy")
+            bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="cxcywh")
             self.bboxes.setdefault(image_id, []).append(bbox)
 
     def __len__(self) -> int:
@@ -139,7 +140,7 @@ class DroneImages(torch.utils.data.Dataset):
 
         bboxes = torch.cat([b.unsqueeze(0) for b in bboxes])
         # print(bboxes)
-        boxes = datapoints.BoundingBox(bboxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.XYXY)
+        boxes = datapoints.BoundingBox(bboxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.CXCYWH)
 
         y = {
             "boxes": boxes,  # FloatTensor[N, 4]
