@@ -10,9 +10,7 @@
 #SBATCH --partition=accelerated
 #SBATCH --reservation=aihero-gpu
 #SBATCH --account=hk-project-test-aihero2
-# TODO: UPDATE OUTPUT!!
-#SBATCH --output="/hkfs/work/workspace_haic/scratch/bk6983-ai_hero_hackathon_shared/slurm_logs/slurm-%j"
-#####SBATCH --output="/hkfs/work/workspace/scratch/qv2382-madonna/madonna/logs/slurm/slurm-%j"
+#SBATCH --output="/hkfs/work/workspace/scratch/ih5525-E2/slurm_logs/slurm-%j"
 
 ml purge
 
