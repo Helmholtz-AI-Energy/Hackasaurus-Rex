@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.datasets import VisionDataset
+from torchvision.ops import box_convert
 
 
 class DroneImages(torch.utils.data.Dataset):
@@ -156,6 +157,21 @@ class DroneImages(torch.utils.data.Dataset):
         if self.train:
             x, y = self.transformations(x, y)
         return x, y
+
+    def normalize_bbox(self, tensor, size):
+        tensor[:, 0] /= size[0]
+        tensor[:, 2] /= size[0]
+        tensor[:, 1] /= size[1]
+        tensor[:, 3] /= size[1]
+        return tensor
+
+    def bbox_to_oskar(self, tensor, size):
+        tensor[:, 0] *= size[0]
+        tensor[:, 2] *= size[0]
+        tensor[:, 1] *= size[1]
+        tensor[:, 3] *= size[1]
+
+        return box_convert(tensor, "XYXY", "XYWH")
 
 
 def create_train_val_split():
