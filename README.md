@@ -1,6 +1,6 @@
 # hackasaurus-rex
 
-A longer description of your project goes here...
+Zenodo URL: https://zenodo.org/record/8063997
 
 ## Installation
 
