@@ -9,13 +9,18 @@ import torch.distributed as dist
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed as datadist
+import torchvision
+import torchvision.transforms.v2 as transv2
 from torch import autocast
 from torch.cuda.amp import GradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision import transforms
+from torchvision.ops import box_convert
 from ultralytics import YOLO
+from ultralytics.yolo.utils.ops import non_max_suppression
 
 from hackasaurus_rex.data import DroneImages
+from hackasaurus_rex.detr import load_detr_model, postprocess_detr_ouput
 from hackasaurus_rex.metric import IntersectionOverUnion, to_mask
 
 
@@ -36,6 +41,8 @@ def set_seed(seed):
 def initialize_model(hyperparameters):
     if hyperparameters["model"] == "yolo":
         return load_yolo_model(hyperparameters["pretrained_weights"], freeze=True)
+    elif hyperparameters["model"] == "detr":
+        return load_detr_model(hyperparameters["pretrained_weights"], freeze=False)
     else:
         raise NotImplementedError(f'Model {hyperparameters["model"]} not supported.')
 
@@ -98,16 +105,49 @@ def save_model(hyperparameters, model, optimizer, best_iou, start_time):
     )
 
 
-def load_model(hyperparameters, model, optimizer):
-    if "model_checkpoint" in hyperparameters:
+def load_model(hyperparameters, model, optimizer=None):
+    if "checkpoint_path_in" in hyperparameters:
+        print(f"Loading model checkpoint from {hyperparameters['checkpoint_path_in']}")
         checkpoint = torch.load(hyperparameters["checkpoint_path_in"])
         model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        if optimizer:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         print(f"Restoring model checkpoint from {hyperparameters['checkpoint_path_in']}")
         return model
 
 
-def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler):
+def get_bounding_box(prediction, mode):
+    if mode == "yolo":
+        postprocessed_prediction = non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.7)
+        return torch.cat([sample_prediction[:, 0:4] for sample_prediction in postprocessed_prediction])
+        # boxes_for_metric = [{'boxes': sample_prediction[:, 0:4], 'masks': None}
+        #                     for sample_prediction in postprocessed_prediction]
+    elif mode == "detr":
+        return postprocess_detr_ouput(prediction)
+    else:
+        raise NotImplementedError("What are you doing here!")
+
+
+def normalize_bbox(tensor, size):
+    tensor[:, 0] /= size[0]
+    tensor[:, 2] /= size[0]
+    tensor[:, 1] /= size[1]
+    tensor[:, 3] /= size[1]
+    return tensor
+
+
+def bbox_to_oskar(tensor, size):
+    tensor[:, 0] *= size[0]
+    tensor[:, 2] *= size[0]
+    tensor[:, 1] *= size[1]
+    tensor[:, 3] *= size[1]
+
+    return box_convert(tensor, "xywh", "xyxy")
+
+
+def train_epoch(
+    model, optimizer, train_loader, train_metric, device, scaler, warmup_scheduler, lr_scheduler, hyperparameters
+):
     # set the model into training mode
     model.train()
     rank = dist.get_rank() if dist.is_initialized() else 0
@@ -117,16 +157,40 @@ def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, wa
     metric_avg = 0.0
     avg_train_time = time.perf_counter()
     total_train_time = time.perf_counter()
+    # resize = transv2.Resize((2680, 3370))
+    # model.train()
+    # if rank == 0:
+    #     for n, p in model.named_parameters():
+    #         print(f"{n}: {p.requires_grad}, {p.mean():.4f} {p.min():.4f} {p.max():.4f}")
     for i, batch in enumerate(train_loader):
         x, labels = batch
-        x = list(image.to(device) for image in x)
+        x = torch.cat([i.unsqueeze(0) for i in x])
+        x = x.to(device)
         labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
+        labels2 = []
+        for lab in labels:
+            labels2.append({})
+            labels2[-1]["labels"] = lab["labels"].to(device)
+            labels2[-1]["class_labels"] = lab["labels"].to(device)
+            labels2[-1]["masks"] = lab["masks"].to(device)
+            labels2[-1]["boxes"] = normalize_bbox(lab["boxes"], [893, 1123]).to(device)
+            # labels2.append({k: v.to(device) for k, v in lab.items()})
+            # labels2[-1]
+        # for l in labels:
+        #     print(l["boxes"].shape)
+        # target_boxes = torch.cat([label["boxes"] for label in labels]).to(device)
+
+        # print(target_boxes)
         model.zero_grad()
 
-        with autocast(device_type="cuda", dtype=torch.float16, enabled=True):
-            losses = model(x, labels)
-            # TODO: FIXME?
-            loss = sum(loss for loss in losses.values())
+        with autocast(device_type="cuda", dtype=torch.float16, enabled=hyperparameters["amp"]):
+            prediction = model(x, labels=labels2)
+            # print(prediction)
+            loss = prediction.loss
+            # loss.backward
+            # predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
+            # print(predicted_boxes.shapes, target_boxes.shapes)
+            # loss = torchvision.ops.generalized_box_iou_loss(predicted_boxes, target_boxes)
         scaler.scale(loss).backward()
 
         scaler.step(optimizer)
@@ -140,13 +204,31 @@ def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, wa
 
         # compute metric
         with torch.no_grad():
-            model.eval()
-            train_predictions = model(x)
-            metric = train_metric(*to_mask(train_predictions, labels)).item()
-            model.train()
-        if rank == 0 and (i % 10 == 9 or i == len(train_loader) - 1):
+            # model.eval()
+            # train_predictions = model(x)
+            # metric needs:
+            #   boxes -> list(dict("boxes"))
+            #   masks ->
+            target_shape = list(x.shape[:-2]) + [2680, 3370]
+            # if i == len(train_loader) - 1:
+            #     print(prediction)
+            metric_in = [
+                {"boxes": prediction.pred_boxes[i], "masks": torch.empty(target_shape)}
+                for i in range(prediction.pred_boxes.shape[0])
+            ]
+            # _, metric_in = resize(x, metric_in)
+            for c in range(len(metric_in)):
+                metric_in[c]["boxes"] = bbox_to_oskar(metric_in[c]["boxes"], [2680, 3370])
+
+            # if i == len(train_loader) - 1:
+            #     print(metric_in)
+            #     raise ValueError
+            metric = train_metric(*to_mask(metric_in, labels)).item()
+            # model.train()
+        if rank == 0:  # and (i % 10 == 9 or i == len(train_loader) - 1):
             print(
-                f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / i:.3f}"
+                f"Train step {i}: metric: {metric:.4f} avg batch time: "
+                f"{(time.perf_counter() - avg_train_time) / (i + 1):.3f} loss {loss.item():.4f}"
             )
         metric_avg += metric
     if rank == 0:
@@ -154,30 +236,53 @@ def train_epoch(model, optimizer, train_loader, train_metric, device, scaler, wa
             f"\nTrain epoch end: metric: {metric_avg / len(train_loader):.4f} total time: "
             f"{(time.perf_counter() - total_train_time)}s Memory utilized: {torch.cuda.max_memory_allocated()}\n"
         )
+    # if rank == 0:
+    #     for n, p in model.named_parameters():
+    #         print(f"{n}: {p.requires_grad}, {p.mean():.4f} {p.min():.4f} {p.max():.4f}")
 
-    return train_loss
+    return train_loss, train_metric.compute()
 
 
 def evaluate(model, test_loader, test_metric, device):
     rank = dist.get_rank() if dist.is_initialized() else 0
     model.eval()
     iou_avg = 0
-    resize_to_large = transforms.v2.Resize((2680, 3370))
+    # resize = transv2.Resize((2680, 3370))
     for i, batch in enumerate(test_loader):
-        x_test, test_label = batch
-        x_test, test_label = resize_to_large(x_test, test_label)
+        x, labels = batch
+        x = torch.cat([i.unsqueeze(0) for i in x])
+        x = x.to(device)
+        labels = [{k: v.to(device) for k, v in label.items()} for label in labels]
+        labels2 = []
+        for lab in labels:
+            labels2.append({})
+            labels2[-1]["labels"] = lab["labels"].to(device)
+            labels2[-1]["class_labels"] = lab["labels"].to(device)
+            labels2[-1]["masks"] = lab["masks"].to(device)
+            labels2[-1]["boxes"] = normalize_bbox(lab["boxes"], [893, 1123]).to(device)
         # x_test = list(image.to(device) for image in x_test)
         # test_label = [{k: v.to(device) for k, v in label.items()} for label in test_label]
 
         # score_threshold = 0.7
         with torch.no_grad():
-            test_predictions = model(x_test)
-            iou = test_metric(*to_mask(test_predictions, test_label))
+            prediction = model(x, labels=labels2)
+            target_shape = list(x.shape[:-2]) + [2680, 3370]
+            metric_in = [
+                {"boxes": prediction.pred_boxes[i], "masks": torch.empty(target_shape)}
+                for i in range(prediction.pred_boxes.shape[0])
+            ]
+            # _, metric_in = resize(x, metric_in)
+            for c in range(len(metric_in)):
+                metric_in[c]["boxes"] = bbox_to_oskar(metric_in[c]["boxes"], [2680, 3370])
+            iou = test_metric(*to_mask(metric_in, labels)).item()
             iou_avg += iou
-            if rank == 0 and (i % 10 == 9 or i == len(test_loader) - 1):
-                print(f"Eval step: {i}: Avg iou: {iou_avg / i}")
+            if rank == 0:
+                print(f"Eval step: {i}: Avg iou: {iou_avg / (i + 1)}")
+
+    end_iou = test_metric.compute()
     if rank == 0:
-        print(f"End Eval: avg iou: {iou / len(test_loader)}\n")
+        print(f"End Eval: avg iou: {iou_avg / len(test_loader)} - {end_iou}\n")
+    return end_iou
 
 
 def train(hyperparameters):
@@ -191,9 +296,9 @@ def train(hyperparameters):
     print(f"Training on {device}")
 
     model = initialize_model(hyperparameters)
+    model.to(device)
     if dist.is_initialized():
         model = DDP(model)  # , device_ids=[config.rank])
-    model.to(device)
 
     # TODO: set up the dataset
     drone_images = DroneImages(hyperparameters["data"]["data_root"])
@@ -215,8 +320,8 @@ def train(hyperparameters):
         train_data,
         batch_size=hyperparameters["data"]["batch_size"],
         shuffle=shuffle,
-        num_workers=6,
-        pin_memory=hyperparameters["data"]["workers"],
+        num_workers=hyperparameters["data"]["workers"],
+        pin_memory=hyperparameters["data"]["pin_memory"],
         sampler=train_sampler,
         persistent_workers=hyperparameters["data"]["persistent_workers"],
         collate_fn=collate_fn,
@@ -233,8 +338,9 @@ def train(hyperparameters):
         batch_size=hyperparameters["data"]["batch_size"],
         shuffle=shuffle,
         num_workers=hyperparameters["data"]["workers"],
-        pin_memory=True,
+        pin_memory=hyperparameters["data"]["pin_memory"],
         sampler=test_sampler,
+        collate_fn=collate_fn,
         persistent_workers=hyperparameters["data"]["persistent_workers"],
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
@@ -247,7 +353,7 @@ def train(hyperparameters):
         400,
         gamma=0.1,
     )
-    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=200)
+    warmup_scheduler = warmup.LinearWarmup(optimizer, warmup_period=20)
 
     load_model(hyperparameters, model, optimizer)
 
@@ -258,27 +364,37 @@ def train(hyperparameters):
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
     test_metric = test_metric.to(device)
 
-    scaler = GradScaler(enabled=True)
+    scaler = GradScaler(enabled=hyperparameters["amp"])
 
     # start the actual training procedure
     for epoch in range(hyperparameters["epochs"]):
-        train_loss = train_epoch(model, optimizer, train_loader, train_metric, device, scaler)
+        train_loss, train_metric_out = train_epoch(
+            model,
+            optimizer,
+            train_loader,
+            train_metric,
+            device,
+            scaler,
+            warmup_scheduler,
+            lr_scheduler,
+            hyperparameters,
+        )
         train_loss /= len(train_loader)
 
-        evaluate(model, test_loader, test_metric, device)
+        test_metric_out = evaluate(model, test_loader, test_metric, device)
 
         if rank == 0:
             # output the losses
             print(f"Epoch {epoch}")
             print(f"\tTrain loss: {train_loss}")
-            print(f"\tTrain IoU:  {train_metric.compute()}")
-            print(f"\tTest IoU:   {test_metric.compute()}")
+            print(f"\tTrain IoU:  {train_metric_out}")
+            print(f"\tTest IoU:   {test_metric_out}")
 
-        # save the best performing model on disk
-        if test_metric.compute() > best_iou and rank == 0:
-            best_iou = test_metric.compute()
+        # # save the best performing model on disk
+        if test_metric_out > best_iou and rank == 0:
+            best_iou = test_metric_out
             print("\tSaving better model\n")
-            # torch.save(model.state_dict(), "checkpoint.pt")
+            torch.save(model.state_dict(), "checkpoint.pt")
             save_model(hyperparameters, model, optimizer, best_iou, start_time)
         elif rank == 0:
             print("\n")
@@ -290,6 +406,9 @@ def train(hyperparameters):
 def evaluation(hyperparameters):
     set_seed(hyperparameters["seed"])
     device = get_device()
+
+    print(dist.is_initialized())
+    rank = dist.get_rank() if dist.is_initialized() else 0
 
     drone_images = DroneImages(hyperparameters["data"]["data_root"])
     if hyperparameters["split_data"]:
@@ -306,19 +425,23 @@ def evaluation(hyperparameters):
         test_data,
         batch_size=hyperparameters["data"]["batch_size"],
         shuffle=False,
-        num_workers=6,
-        pin_memory=True,
+        num_workers=hyperparameters["data"]["workers"],
+        pin_memory=hyperparameters["data"]["pin_memory"],
         sampler=test_sampler,
+        collate_fn=collate_fn,
         persistent_workers=hyperparameters["data"]["persistent_workers"],
         prefetch_factor=hyperparameters["data"]["prefetch_factor"],
     )
     model = initialize_model(hyperparameters)
-    # TODO: load our model checkpoint
     model.to(device)
+    if dist.is_initialized():
+        model = DDP(model)
+    load_model(hyperparameters, model)
 
     test_metric = IntersectionOverUnion(task="multiclass", num_classes=2)
     test_metric = test_metric.to(device)
 
     evaluate(model, test_loader, test_metric, device)
 
-    print(f"Test IoU: {test_metric.compute()}")
+    if rank == 0:
+        print(f"Test IoU: {test_metric.compute()}")

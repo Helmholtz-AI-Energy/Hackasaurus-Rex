@@ -17,6 +17,8 @@ import torchvision.transforms.v2 as transv2
 from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from torchvision.datasets import VisionDataset
+from torchvision.ops import box_convert
 
 
 class DroneImages(torch.utils.data.Dataset):
@@ -53,7 +55,7 @@ class DroneImages(torch.utils.data.Dataset):
         )
         # self.first_trans = torch.jit.script(self.first_trans)
         self.grey = transforms.Grayscale()
-        self.resize = transv2.Resize((1340, 1685))
+        self.resize = transv2.Resize((893, 1123))
         # self.transformations = torch.jit.script(transformations)
 
     @staticmethod
@@ -87,7 +89,7 @@ class DroneImages(torch.utils.data.Dataset):
             image_id = entry["image_id"]
             self.polys.setdefault(image_id, []).append(entry["segmentation"])
             bbox = torch.tensor(entry["bbox"])
-            bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="xyxy")
+            # bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="cxcywh")
             self.bboxes.setdefault(image_id, []).append(bbox)
 
     def __len__(self) -> int:
@@ -109,9 +111,9 @@ class DroneImages(torch.utils.data.Dataset):
         # deserialize the image from disk
         x = np.load(self.images[image_id])
         # if self.staging_proc.is_alive():
-        save_loc = self.tmp_dir / f"{image_id}.npy"
-        self.queue.put((save_loc, x, image_id))
-        self.images[image_id] = save_loc
+        # save_loc = self.tmp_dir / f"{image_id}.npy"
+        # self.queue.put((save_loc, x, image_id))
+        # self.images[image_id] = save_loc
 
         x = torch.tensor(x, dtype=torch.float).permute((2, 0, 1))
         polys = self.polys[image_id]
@@ -136,8 +138,9 @@ class DroneImages(torch.utils.data.Dataset):
 
         labels = torch.tensor([1 for a in polys], dtype=torch.int64)
 
-        # boxes = torch.tensor(bboxes, dtype=torch.float)
-        boxes = datapoints.BoundingBox(bboxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.XYXY)
+        bboxes = torch.cat([b.unsqueeze(0) for b in bboxes])
+        # print(bboxes)
+        boxes = datapoints.BoundingBox(bboxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.CXCYWH)
 
         y = {
             "boxes": boxes,  # FloatTensor[N, 4]

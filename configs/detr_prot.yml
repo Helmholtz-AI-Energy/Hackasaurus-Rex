@@ -1,0 +1,21 @@
+epochs: 10000
+lr: 1.0e-3
+seed: 42
+
+model: detr
+pretrained_weights: "facebook/detr-resnet-50"
+# checkpoint_path_in: "/hkfs/work/workspace/scratch/ih5525-E2/Hackasaurus-Rex/models/DETR/1687345725_0.45248329639434814.pt"
+checkpoint_path_out: "/hkfs/work/workspace/scratch/ih5525-E2/Hackasaurus-Rex/models/DETR/"
+
+data:
+  data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'
+  batch_size: 6
+  workers: 8
+  pin_memory: False
+  persistent_workers: True
+  prefetch_factor: 2
+
+split_data: True
+comm_method: nccl-slurm
+mode: detr
+amp: False

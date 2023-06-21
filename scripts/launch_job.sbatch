@@ -2,7 +2,7 @@
 
 # Slurm job configuration
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:4
 #SBATCH --exclusive
 #SBATCH --time=04:00:00
@@ -22,11 +22,14 @@ DATA_DIR="/hkfs/work/workspace/scratch/ih5525-energy-train-data"
 #export EXT_DATA_PREFIX="/hkfs/home/dataset/datasets/"
 #TOMOUNT+="${EXT_DATA_PREFIX},"
 
-TOMOUNT="${BASE_DIR},${DATA_DIR},"
+TOMOUNT=${TOMOUNT:-""}
+TOMOUNT+="${BASE_DIR},${DATA_DIR},"
 TOMOUNT+="/scratch,/tmp,"
 #TOMOUNT+="/hkfs/work/workspace/scratch/qv2382-dlrt/datasets"
 TOMOUNT+='/etc/slurm/task_prolog.hk'
-# TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/"
+TOMOUNT+=",/hkfs/work/workspace/scratch/qv2382-hackathon/"
+TOMOUNT+=",/hkfs/work/workspace/scratch/ih5525-E2/"
+
 export TOMOUNT="${TOMOUNT}"
 
 SRUN_PARAMS=(
@@ -56,6 +59,6 @@ export NCCL_COLLNET_ENABLE=0
 # export CUDA_VISIBLE_DEVICES="0,1,2,3"
 
 # TODO: make sure to update teh config and the call below this
-# export CONFIG_NAME="ortho_train.yaml"
 
-srun "${SRUN_PARAMS[@]}" bash -c "python -u /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/test_data.py"
+COMMAND=${COMMAND:-"python -u /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/scripts/train.py -c /hkfs/work/workspace/scratch/qv2382-hackathon/Hackasaurus-Rex/configs/detr_prot.yml"}
+srun "${SRUN_PARAMS[@]}" bash -c "${COMMAND}"
