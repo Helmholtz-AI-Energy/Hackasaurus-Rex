@@ -107,6 +107,7 @@ def save_model(hyperparameters, model, optimizer, best_iou, start_time):
 
 def load_model(hyperparameters, model, optimizer=None):
     if "model_checkpoint" in hyperparameters:
+        print(f"Loading model checkpoint from {hyperparameters['checkpoint_path_in']}")
         checkpoint = torch.load(hyperparameters["checkpoint_path_in"])
         model.load_state_dict(checkpoint["model_state_dict"])
         if optimizer:
