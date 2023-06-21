@@ -2,7 +2,7 @@ seed: 42
 
 model: detr
 pretrained_weights: "facebook/detr-resnet-50"
-checkpoint_path_in:  '/hkfs/work/workspace/scratch/ih5525-E2/Hackasaurus-Rex/models/DETR/1687335129_0.4985698461532593.pt'
+checkpoint_path_in:  '/hkfs/work/workspace/scratch/ih5525-E2/Hackasaurus-Rex/models/DETR/1687345071_0.30239906907081604.pt'
 
 data:
   data_root: '/hkfs/work/workspace/scratch/ih5525-energy-train-data'  # set path to test directory here
