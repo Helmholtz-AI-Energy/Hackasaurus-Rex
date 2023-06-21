@@ -89,7 +89,7 @@ class DroneImages(torch.utils.data.Dataset):
             image_id = entry["image_id"]
             self.polys.setdefault(image_id, []).append(entry["segmentation"])
             bbox = torch.tensor(entry["bbox"])
-            bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="xyxy")
+            bbox = torchvision.ops.box_convert(bbox, in_fmt="xywh", out_fmt="cxcywh")
             self.bboxes.setdefault(image_id, []).append(bbox)
 
     def __len__(self) -> int:
@@ -140,7 +140,7 @@ class DroneImages(torch.utils.data.Dataset):
 
         bboxes = torch.cat([b.unsqueeze(0) for b in bboxes])
         # print(bboxes)
-        boxes = datapoints.BoundingBox(bboxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.XYXY)
+        boxes = datapoints.BoundingBox(bboxes, spatial_size=(2680, 3370), format=datapoints.BoundingBoxFormat.CXCYWH)
 
         y = {
             "boxes": boxes,  # FloatTensor[N, 4]
@@ -157,21 +157,6 @@ class DroneImages(torch.utils.data.Dataset):
         if self.train:
             x, y = self.transformations(x, y)
         return x, y
-
-    def normalize_bbox(self, tensor, size):
-        tensor[:, 0] /= size[0]
-        tensor[:, 2] /= size[0]
-        tensor[:, 1] /= size[1]
-        tensor[:, 3] /= size[1]
-        return tensor
-
-    def bbox_to_oskar(self, tensor, size):
-        tensor[:, 0] *= size[0]
-        tensor[:, 2] *= size[0]
-        tensor[:, 1] *= size[1]
-        tensor[:, 3] *= size[1]
-
-        return box_convert(tensor, "XYXY", "XYWH")
 
 
 def create_train_val_split():

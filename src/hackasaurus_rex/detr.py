@@ -30,7 +30,7 @@ def load_detr_model(pretrained_weights="facebook/detr-resnet-50", freeze=False):
 
 
 base_config = DetrConfig(
-    use_timm_backbone=True,
+    use_timm_backbone=False,
     backbone_config=None,
     num_channels=3,
     num_queries=100,
