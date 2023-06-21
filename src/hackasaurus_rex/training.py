@@ -161,7 +161,6 @@ def train_epoch(
         with autocast(device_type="cuda", dtype=torch.float16, enabled=False):
             prediction = model(x, labels=labels2)
             print(prediction)
-            raise ValueError
             loss = prediction.loss
             # loss.backward
             # predicted_boxes = get_bounding_box(prediction, mode=hyperparameters["mode"])
@@ -195,7 +194,8 @@ def train_epoch(
             # model.train()
         if rank == 0:  # and (i % 10 == 9 or i == len(train_loader) - 1):
             print(
-                f"Train step {i}: metric: {metric:.4f} avg batch time: {(time.perf_counter() - avg_train_time) / (i + 1):.3f} loss {loss.item():.4f}"
+                f"Train step {i}: metric: {metric:.4f} avg batch time: "
+                f"{(time.perf_counter() - avg_train_time) / (i + 1):.3f} loss {loss.item():.4f}"
             )
         metric_avg += metric
     if rank == 0:
